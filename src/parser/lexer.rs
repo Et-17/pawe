@@ -5,28 +5,28 @@ use itertools::{Itertools, PeekingNext};
 #[derive(Debug, PartialEq)]
 pub enum Token {
     // Keywords
-    Languages, // languages
+    Languages,  // languages
     Parameters, // parameters
-    Features, // features
+    Features,   // features
     Characters, // characters
-    Evolve, // evolve
-    To, // to
+    Evolve,     // evolve
+    To,         // to
 
     // Special characters
-    Output, // >
-    Environment, // /
+    Output,        // >
+    Environment,   // /
     InputLocation, // _
-    WordBoundry, // #
-    EOL, // ;
+    WordBoundry,   // #
+    EOL,           // ;
 
     // Section markers
-    BlockOpen, // {
-    BlockClose, // }
-    MatchingPhonemeOpen, // (
+    BlockOpen,                         // {
+    BlockClose,                        // }
+    MatchingPhonemeOpen,               // (
     TaggedMatchingPhonemeOpen(String), // █(
-    MatchingPhonemeClose, // )
-    ConcretePhonemeOpen, // [
-    ConcretePhonemeClose, // ]
+    MatchingPhonemeClose,              // )
+    ConcretePhonemeOpen,               // [
+    ConcretePhonemeClose,              // ]
 
     // General tokens
     PositiveIdentifier(String), // +███
@@ -37,7 +37,7 @@ pub enum Token {
 }
 
 pub struct LexemeStream<'a> {
-    char_stream: Peekable<Chars<'a>>
+    char_stream: Peekable<Chars<'a>>,
 }
 
 impl Iterator for LexemeStream<'_> {
@@ -53,7 +53,7 @@ pub fn lex_raw_identifier(line: &mut Peekable<Chars>) -> Token {
 
     // Check if this is the opening of a tagged matching phoneme
     if line.peeking_next(|c| *c == '(').is_some() {
-        return Token::TaggedMatchingPhonemeOpen(identifier)
+        return Token::TaggedMatchingPhonemeOpen(identifier);
     }
 
     return match identifier.as_str() {
@@ -63,8 +63,8 @@ pub fn lex_raw_identifier(line: &mut Peekable<Chars>) -> Token {
         "characters" => Token::Characters,
         "evolve" => Token::Evolve,
         "to" => Token::To,
-        _ => Token::UnmarkedIdentifier(identifier)
-    }
+        _ => Token::UnmarkedIdentifier(identifier),
+    };
 }
 
 pub fn lex_pos_identifier(line: &mut Peekable<Chars>) -> Token {
@@ -106,7 +106,7 @@ pub fn lex_token(line: &mut Peekable<Chars>) -> Option<Token> {
             '[' => Token::ConcretePhonemeOpen,
             ']' => Token::ConcretePhonemeClose,
 
-            unknown => Token::UnknownCharacter(unknown)
+            unknown => Token::UnknownCharacter(unknown),
         });
 
         line.next();
@@ -116,6 +116,6 @@ pub fn lex_token(line: &mut Peekable<Chars>) -> Option<Token> {
     return None;
 }
 
-pub fn lex_stream (line: Peekable<Chars>) -> LexemeStream {
+pub fn lex_stream(line: Peekable<Chars>) -> LexemeStream {
     LexemeStream { char_stream: line }
 }
