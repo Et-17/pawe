@@ -1,95 +1,106 @@
-# Define the languages to be used in this file
-languages:
-	ProtoIndoEuropean
-	PreProtoGermanic
+// Define the languages to be used in this file
 
-# Establish some basic distinctions
+languages {
+    ProtoIndoEuropean;
+    PreProtoGermanic;
+}
 
-parameters:
-	type {consonant vowel}
-	length {short halflong long overlong}
+// Establish some basic distinctions
 
-features:
-	syllabic
-	stressed # we will only mark codas as stressed
+parameters {
+    type {consonant; vowel}
+    length {short; halflong; long; overlong}
+}
 
-# Establish necessary information for consonants
+features {
+    syllabic;
+    stressed; // we will only mark vowels as stressed
+}
 
-parameters:
-	place {bilabial dental alveolar post_alveolar palatal palatovelar laryngeal velar pharyngeal}
-	manner {nasal plosive fricative approximant tap trill}
-	pieLaryngeal {neutral aColoring oColoring}
+// Establish necessary information for consonants
 
-features:
-	voiced
-	lateral
-	labialized
+parameters {
+    place {bilabial; dental; alveolar; post_alveolar; palatal; palatovelar; laryngeal; velar; pharyngeal}
+    manner {nasal; plosive; fricative; approximant; tap; trill}
+    pieLaryngeal {neutral; aColoring; oColoring}
+}
 
-characters:
-	m [+type.consonant +place.bilabial +manner.nasal -lateral +voiced +length.short]
-	t [+type.consonant +place.alveolar +manner.plosive -lateral -voiced +length.short]
-	s [+type.consonant +place.alveolar +manner.fricative -lateral -voiced +length.short]
-	l [+type.consonant +place.alveolar +manner.approximant +lateral +voiced +length.short]
-	h₁ [+type.consonant +place.laryngeal +manner.fricative -lateral -voiced +length.short +pieLaryngeal.neutral]
-	h₂ [+type.consonant +place.laryngeal +manner.fricative -lateral -voiced +length.short +pieLaryngeal.aColoring]
-	h₃ [+type.consonant +place.laryngeal +manner.fricative -lateral -voiced +length.short +pieLaryngeal.oColoring]
-	w [+type.consonant +place.velar +manner.approximant +labialized -lateral -voiced +length.short]
-	
-# establish necessary information for vowels
+features {
+    voiced;
+    lateral;
+    labialized;
+}
 
-parameters:
-	height {close near_close close_mid mid open_mid near_open open}
-	backness {front near_front central near_back back}
+characters {
+    m [+type.consonant +place.bilabial +manner.nasal -lateral +voiced +length.short];
+    t [+type.consonant +place.alveolar +manner.plosive -lateral -voiced +length.short];
+    s [+type.consonant +place.alveolar +manner.fricative -lateral -voiced +length.short];
+    l [+type.consonant +place.alveolar +manner.approximant +lateral +voiced +length.short];
+    h₁ [+type.consonant +place.laryngeal +manner.fricative -lateral -voiced +length.short +pieLaryngeal.neutral];
+    h₂ [+type.consonant +place.laryngeal +manner.fricative -lateral -voiced +length.short +pieLaryngeal.aColoring];
+    h₃ [+type.consonant +place.laryngeal +manner.fricative -lateral -voiced +length.short +pieLaryngeal.oColoring];
+    w [+type.consonant +place.velar +manner.approximant +labialized -lateral -voiced +length.short];
+}
 
-features:
-	rounded
+// Establish necessary information for vowels
 
-characters:
-	a [+type.vowel +height.open +backness.central -rounded +syllabic +length.short]
-	i [+type.vowel +height.close +backness.front -rounded +syllabic +length.short]
-	u [+type.vowel +height.close +backness.back +rounded +syllabic +length.short]
-	e [+type.vowel +height.close_mid +backness.front -rounded +syllabic +length.short]
-	o [+type.vowel +height.close_mid +backness.back +rounded +syllabic +length.short]
-	ə [+type.vowel +height.mid +backness.central -rounded +syllabic +length.short]
+parameters {
+    height {close; near_close; close_mid; mid; open_mid; near_open; open}
+    backness {front; near_front; central; near_back; back}
+}
 
-# establish rules for evolution
+features {
+    rounded;
+}
 
-evolve ProtoIndoEuropean to PreProtoGermanic:
-	# Allophonic colouring of /e/ adjacent to laryngeal consonants
-	e > a / h₂ _
-	e > a / _ h₂
-	e > o / h₃ _
-	e > o / _ h₃
+characters {
+    a [+type.vowel +height.open +backness.central -rounded +syllabic +length.short];
+	i [+type.vowel +height.close +backness.front -rounded +syllabic +length.short];
+	u [+type.vowel +height.close +backness.back +rounded +syllabic +length.short];
+	e [+type.vowel +height.close_mid +backness.front -rounded +syllabic +length.short];
+	o [+type.vowel +height.close_mid +backness.back +rounded +syllabic +length.short];
+	ə [+type.vowel +height.mid +backness.central -rounded +syllabic +length.short];
+}
 
-	# Merging of PIE palatovelar and velar plosives
-	1(+place.palatovelar +manner.plosive) > [1 +manner.velar]
+// Establish rules for evolution
 
-	# Epenthesis of /u/ before syllabic sonorants
-	1(+type.consonant +syllabic) > u [1 -syllabic]
+evolve ProtoIndoEuropean to PreProtoGermanic {
+	// Allophonic colouring of /e/ adjacent to laryngeal consonants
+	e > a / h₂ _;
+	e > a / _ h₂;
+	e > o / h₃ _;
+	e > o / _ h₃;
 
-	# Processing inter-dental epenthetic /s/ (idk exactly how this works)
-	(+place.dental) s (+place.dental) > [s +length.long]
+	// Merging of PIE palatovelar and velar plosives
+	1(+place.palatovelar +manner.plosive) > [1 +manner.velar];
 
-	# Shortening of geminate consonants after a consonant or a long vowel	
-	1(+type.consonant +length.long) > [1 +length.short] / (+type.consonant) _
-	1(+type.consonant +length.long) > [1 +length.short] / (+type.vowel +length.long) _
+	// Epenthesis of /u/ before syllabic sonorants
+	1(+type.consonant +syllabic) > u [1 -syllabic];
 
-	# Lengthening of word-final long vowels
-	1(+type.vowel +length.long) > [1 +length.overlong] / _ #
+	// Processing inter-dental epenthetic /s/ (idk exactly how this works)
+	(+place.dental) s (+place.dental) > [s +length.long];
 
-	# Loss of laryngeals, phonemicising the allophones of /e/
-	(+place.laryngeal) > / # _ (+type.consonant)
-	1(+type.vowel) (+place.laryngeal) (+type.vowel) > [1 +length.overlong]
-	1(+type.vowel) (+place.laryngeal) > [1 +length.long]
-	(+place.laryngeal) > / _ (+type.vowel)
+	// Shortening of geminate consonants after a consonant or a long vowel	
+	1(+type.consonant +length.long) > [1 +length.short] / (+type.consonant) _;
+	1(+type.consonant +length.long) > [1 +length.short] / (+type.vowel +length.long) _;
 
-	# Vocalization of remaining laryngeals
-	(+place.laryngeal) > ə
+	// Lengthening of word-final long vowels
+	1(+type.vowel +length.long) > [1 +length.overlong] / _ #;
 
-	# Labialization of velars
-	1(+place.velar) w > [1 +labialized]
+	// Loss of laryngeals, phonemicising the allophones of /e/
+	(+place.laryngeal) > / // _ (+type.consonant);
+	1(+type.vowel) (+place.laryngeal) (+type.vowel) > [1 +length.overlong];
+	1(+type.vowel) (+place.laryngeal) > [1 +length.long];
+	(+place.laryngeal) > / _ (+type.vowel);
 
-	# Delabialization of labiovelars
-	1(+place.velar +labialized) > [1 -labialized] > _ u 
-	1(+place.velar +labialized) > [1 -labialized] > u _ 
-	1(+place.velar +labialized) > [1 -labialized] > _ t 
+	// Vocalization of remaining laryngeals
+	(+place.laryngeal) > ə;
+
+	// Labialization of velars
+	1(+place.velar) w > [1 +labialized];
+
+	// Delabialization of labiovelars
+	1(+place.velar +labialized) > [1 -labialized] > _ u;
+	1(+place.velar +labialized) > [1 -labialized] > u _;
+	1(+place.velar +labialized) > [1 -labialized] > _ t;
+}
