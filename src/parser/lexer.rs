@@ -37,9 +37,14 @@ impl FileLexer {
         while graphemes.peek().is_some() {
             let next_token_opt = lex_token(&mut graphemes);
 
-            match next_token_opt {
-                Some(t) => self.current_line_tokens.push_back(t),
-                None => break,
+            if let Some(t) = next_token_opt {
+                if t.token == RawToken::Comment {
+                    break; // Stop processing this line
+                }
+
+                self.current_line_tokens.push_back(t);
+            } else {
+                break;
             }
         }
 
@@ -91,6 +96,7 @@ pub enum RawToken {
     InputLocation, // _
     WordBoundry,   // #
     EOL,           // ;
+    Comment,       // //
 
     // Section markers
     BlockOpen,                         // {
@@ -154,10 +160,14 @@ impl MarkedChar {
     }
 }
 
+fn intra_identifier_character(c: char) -> bool {
+    c.is_alphanumeric() || c == '.'
+}
+
 fn lex_raw_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> RawToken {
     // let identifier = line.peeking_take_while(|c| c.grapheme.is_alphanumeric()).map(|c| c.grapheme).collect();
     let identifier = line
-        .peeking_take_while(|c| c.grapheme.is_alphanumeric())
+        .peeking_take_while(|c| intra_identifier_character(c.grapheme))
         .map(|c| c.grapheme)
         .collect();
 
@@ -179,7 +189,7 @@ fn lex_raw_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) ->
 
 fn lex_pos_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> RawToken {
     let identifier = line
-        .peeking_take_while(|c| c.grapheme.is_alphanumeric())
+        .peeking_take_while(|c| intra_identifier_character(c.grapheme))
         .map(|c| c.grapheme)
         .collect();
     return RawToken::PositiveIdentifier(identifier);
@@ -187,7 +197,7 @@ fn lex_pos_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) ->
 
 fn lex_neg_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> RawToken {
     let identifier = line
-        .peeking_take_while(|c| c.grapheme.is_alphanumeric())
+        .peeking_take_while(|c| intra_identifier_character(c.grapheme))
         .map(|c| c.grapheme)
         .collect();
     return RawToken::NegativeIdentifier(identifier);
@@ -211,28 +221,32 @@ fn lex_token<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> Option<T
             return Some(mark_token(lex_neg_identifier(line), pos));
         }
 
-        let to_return = Some(mark_token(
-            match c {
-                '>' => RawToken::Output,
-                '/' => RawToken::Environment,
-                '_' => RawToken::InputLocation,
-                '#' => RawToken::WordBoundry,
-                ';' => RawToken::EOL,
+        let to_return = match c {
+            '>' => RawToken::Output,
+            '/' => RawToken::Environment,
+            '_' => RawToken::InputLocation,
+            '#' => RawToken::WordBoundry,
+            ';' => RawToken::EOL,
 
-                '{' => RawToken::BlockOpen,
-                '}' => RawToken::BlockClose,
-                '(' => RawToken::MatchingPhonemeOpen,
-                ')' => RawToken::MatchingPhonemeClose,
-                '[' => RawToken::ConcretePhonemeOpen,
-                ']' => RawToken::ConcretePhonemeClose,
+            '{' => RawToken::BlockOpen,
+            '}' => RawToken::BlockClose,
+            '(' => RawToken::MatchingPhonemeOpen,
+            ')' => RawToken::MatchingPhonemeClose,
+            '[' => RawToken::ConcretePhonemeOpen,
+            ']' => RawToken::ConcretePhonemeClose,
 
-                unknown => RawToken::UnknownCharacter(unknown),
-            },
-            pos,
-        ));
+            unknown => RawToken::UnknownCharacter(unknown),
+        };
 
         line.next();
-        return to_return;
+
+        if to_return == RawToken::Environment {
+            if line.peek().is_some_and(|c| c.grapheme == '/') {
+                line.next();
+                return Some(mark_token(RawToken::Comment, pos));
+            }
+        }
+        return Some(mark_token(to_return, pos));
     }
 
     return None;
