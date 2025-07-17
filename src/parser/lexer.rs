@@ -1,9 +1,82 @@
-use std::{iter::Peekable, str::Chars};
+use std::{
+    collections::VecDeque,
+    fmt::Debug,
+    fs::File,
+    io::{BufRead, BufReader},
+    iter::Peekable,
+    path::PathBuf,
+};
 
 use itertools::{Itertools, PeekingNext};
 
+pub struct FileLexer {
+    file: BufReader<File>,
+    current_line_tokens: VecDeque<Token>,
+    line_num: usize,
+}
+
+impl FileLexer {
+    fn lex_line(&mut self) -> Option<std::io::Result<()>> {
+        let mut next_line = String::new();
+        let read_amount = self.file.read_line(&mut next_line);
+
+        if let Ok(0) = read_amount {
+            return None;
+        } else if let Err(e) = read_amount {
+            return Some(Err(e));
+        }
+
+        self.line_num += 1;
+
+        let mut graphemes = next_line
+            .chars()
+            .enumerate()
+            .map(MarkedChar::from_enumerated_grapheme(self.line_num))
+            .peekable();
+
+        while graphemes.peek().is_some() {
+            let next_token_opt = lex_token(&mut graphemes);
+
+            match next_token_opt {
+                Some(t) => self.current_line_tokens.push_back(t),
+                None => break,
+            }
+        }
+
+        return Some(Ok(()));
+    }
+
+    pub fn lex_file(path: PathBuf) -> std::io::Result<FileLexer> {
+        let file = File::open(path)?;
+
+        Ok(FileLexer {
+            file: BufReader::new(file),
+            current_line_tokens: VecDeque::new(),
+            line_num: 0,
+        })
+    }
+}
+
+impl Iterator for FileLexer {
+    type Item = std::io::Result<Token>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current_line_tokens.len() > 0 {
+            let next_token = self.current_line_tokens.pop_front()?;
+            return Some(Ok(next_token));
+        } else {
+            let line_lexing_res = self.lex_line()?;
+
+            return match line_lexing_res {
+                Err(e) => Some(Err(e)),
+                Ok(()) => self.next(),
+            };
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
-pub enum Token {
+pub enum RawToken {
     // Keywords
     Languages,  // languages
     Parameters, // parameters
@@ -36,86 +109,131 @@ pub enum Token {
     UnknownCharacter(char),
 }
 
-pub struct LexemeStream<'a> {
-    char_stream: Peekable<Chars<'a>>,
+#[derive(Clone)]
+pub struct Position {
+    pub line: usize,
+    pub char: usize,
 }
 
-impl Iterator for LexemeStream<'_> {
-    type Item = Token;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        lex_token(&mut self.char_stream)
+impl Debug for Position {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.line, self.char)
     }
 }
 
-pub fn lex_raw_identifier(line: &mut Peekable<Chars>) -> Token {
-    let identifier = line.peeking_take_while(|c| c.is_alphanumeric()).collect();
+fn mark_token(token: RawToken, pos: Position) -> Token {
+    Token { token, pos }
+}
+
+pub struct Token {
+    pub token: RawToken,
+    pub pos: Position,
+}
+
+impl Debug for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}::{:?}", self.pos, self.token)
+    }
+}
+
+// This is a unicode grapheme that also contains information about where in
+// the file it occurs
+struct MarkedChar {
+    grapheme: char,
+    pos: Position,
+}
+
+impl MarkedChar {
+    // Generates a closure for a specific line number that can be used in a
+    // map after .graphemes().enumerate()
+    fn from_enumerated_grapheme(line: usize) -> impl Fn((usize, char)) -> MarkedChar {
+        move |(i, grapheme): (usize, char)| MarkedChar {
+            grapheme,
+            pos: Position { line, char: i + 1 },
+        }
+    }
+}
+
+fn lex_raw_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> RawToken {
+    // let identifier = line.peeking_take_while(|c| c.grapheme.is_alphanumeric()).map(|c| c.grapheme).collect();
+    let identifier = line
+        .peeking_take_while(|c| c.grapheme.is_alphanumeric())
+        .map(|c| c.grapheme)
+        .collect();
 
     // Check if this is the opening of a tagged matching phoneme
-    if line.peeking_next(|c| *c == '(').is_some() {
-        return Token::TaggedMatchingPhonemeOpen(identifier);
+    if line.peeking_next(|c| c.grapheme == '(').is_some() {
+        return RawToken::TaggedMatchingPhonemeOpen(identifier);
     }
 
     return match identifier.as_str() {
-        "languages" => Token::Languages,
-        "parameters" => Token::Parameters,
-        "features" => Token::Features,
-        "characters" => Token::Characters,
-        "evolve" => Token::Evolve,
-        "to" => Token::To,
-        _ => Token::UnmarkedIdentifier(identifier),
+        "languages" => RawToken::Languages,
+        "parameters" => RawToken::Parameters,
+        "features" => RawToken::Features,
+        "characters" => RawToken::Characters,
+        "evolve" => RawToken::Evolve,
+        "to" => RawToken::To,
+        _ => RawToken::UnmarkedIdentifier(identifier),
     };
 }
 
-pub fn lex_pos_identifier(line: &mut Peekable<Chars>) -> Token {
-    let identifier = line.peeking_take_while(|c| c.is_alphanumeric()).collect();
-    return Token::PositiveIdentifier(identifier);
+fn lex_pos_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> RawToken {
+    let identifier = line
+        .peeking_take_while(|c| c.grapheme.is_alphanumeric())
+        .map(|c| c.grapheme)
+        .collect();
+    return RawToken::PositiveIdentifier(identifier);
 }
 
-pub fn lex_neg_identifier(line: &mut Peekable<Chars>) -> Token {
-    let identifier = line.peeking_take_while(|c| c.is_alphanumeric()).collect();
-    return Token::NegativeIdentifier(identifier);
+fn lex_neg_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> RawToken {
+    let identifier = line
+        .peeking_take_while(|c| c.grapheme.is_alphanumeric())
+        .map(|c| c.grapheme)
+        .collect();
+    return RawToken::NegativeIdentifier(identifier);
 }
 
-pub fn lex_token(line: &mut Peekable<Chars>) -> Option<Token> {
-    while let Some(c) = line.peek() {
+fn lex_token<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> Option<Token> {
+    while let Some(marked_char) = line.peek() {
+        let c = marked_char.grapheme;
+        let pos = marked_char.pos.clone();
+
         if c.is_whitespace() {
             line.next();
             continue;
         } else if c.is_alphanumeric() {
-            return Some(lex_raw_identifier(line));
-        } else if *c == '+' {
+            return Some(mark_token(lex_raw_identifier(line), pos));
+        } else if c == '+' {
             line.next();
-            return Some(lex_pos_identifier(line));
-        } else if *c == '-' {
+            return Some(mark_token(lex_pos_identifier(line), pos));
+        } else if c == '-' {
             line.next();
-            return Some(lex_neg_identifier(line));
+            return Some(mark_token(lex_neg_identifier(line), pos));
         }
 
-        let to_return = Some(match *c {
-            '>' => Token::Output,
-            '/' => Token::Environment,
-            '_' => Token::InputLocation,
-            '#' => Token::WordBoundry,
-            ';' => Token::EOL,
+        let to_return = Some(mark_token(
+            match c {
+                '>' => RawToken::Output,
+                '/' => RawToken::Environment,
+                '_' => RawToken::InputLocation,
+                '#' => RawToken::WordBoundry,
+                ';' => RawToken::EOL,
 
-            '{' => Token::BlockOpen,
-            '}' => Token::BlockClose,
-            '(' => Token::MatchingPhonemeOpen,
-            ')' => Token::MatchingPhonemeClose,
-            '[' => Token::ConcretePhonemeOpen,
-            ']' => Token::ConcretePhonemeClose,
+                '{' => RawToken::BlockOpen,
+                '}' => RawToken::BlockClose,
+                '(' => RawToken::MatchingPhonemeOpen,
+                ')' => RawToken::MatchingPhonemeClose,
+                '[' => RawToken::ConcretePhonemeOpen,
+                ']' => RawToken::ConcretePhonemeClose,
 
-            unknown => Token::UnknownCharacter(unknown),
-        });
+                unknown => RawToken::UnknownCharacter(unknown),
+            },
+            pos,
+        ));
 
         line.next();
         return to_return;
     }
 
     return None;
-}
-
-pub fn lex_stream(line: Peekable<Chars>) -> LexemeStream {
-    LexemeStream { char_stream: line }
 }

@@ -1,9 +1,12 @@
-use crate::parser::lexer::lex_stream;
+use crate::parser::lexer::FileLexer;
 
 mod error_handling;
 mod parser;
 
-fn main() {
-    let text = "e > a / h₂ _".chars().peekable();
-    lex_stream(text).for_each(|t| println!("{:?}", t));
+fn main() -> std::io::Result<()> {
+    let lexer = FileLexer::lex_file("syntax_example_nocomment.paw".into())?;
+
+    lexer.for_each(|t| println!("{:?}", t.unwrap()));
+
+    return Ok(());
 }
