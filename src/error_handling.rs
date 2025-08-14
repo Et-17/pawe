@@ -1,27 +1,29 @@
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
 pub trait ErrorType: Display + PartialEq {}
 
-#[derive(Debug, PartialEq)]
-pub struct Location {
-    // In the future this will contain file information too, but I'm just doing
-    // this for now until I implement multi-file stuff
-    pub line: usize, // line 0 means the error doesn't have a specific line
+// 0:0 means that the error doesn't have a specific location
+#[derive(Copy, Clone, PartialEq)]
+pub struct Position {
+    pub line: usize,
+    pub char: usize,
 }
 
-impl Display for Location {
+impl Display for Position {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.line > 0 {
-            write!(f, "{}", self.line)
-        } else {
-            write!(f, "")
-        }
+        write!(f, "{}:{}", self.line, self.char)
     }
 }
 
-#[derive(Debug, PartialEq)]
+impl Debug for Position {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+#[derive(PartialEq)]
 pub struct Error<T: ErrorType> {
-    pub location: Location,
+    pub pos: Position,
     pub error: T,
 }
 
@@ -30,7 +32,13 @@ impl<T: ErrorType> Display for Error<T> {
         write!(
             f,
             "\x1b[31;49;1m[{}]\x1b[39;49;1m  {}\x1b[0m",
-            self.location, self.error
+            self.pos, self.error
         )
+    }
+}
+
+impl<T: ErrorType> Debug for Error<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
     }
 }

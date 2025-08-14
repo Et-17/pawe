@@ -9,6 +9,8 @@ use std::{
 
 use itertools::{Itertools, PeekingNext};
 
+use crate::error_handling::{Error, Position};
+
 pub struct FileLexer {
     file: BufReader<File>,
     current_line_tokens: VecDeque<Token>,
@@ -16,14 +18,20 @@ pub struct FileLexer {
 }
 
 impl FileLexer {
-    fn lex_line(&mut self) -> Option<std::io::Result<()>> {
+    fn lex_line(&mut self) -> Option<super::PResult<()>> {
         let mut next_line = String::new();
         let read_amount = self.file.read_line(&mut next_line);
 
         if let Ok(0) = read_amount {
             return None;
         } else if let Err(e) = read_amount {
-            return Some(Err(e));
+            return Some(Err(Error {
+                pos: Position {
+                    line: self.line_num + 1,
+                    char: 0,
+                },
+                error: super::ParseErrorType::FileError(e),
+            }));
         }
 
         self.line_num += 1;
@@ -51,8 +59,11 @@ impl FileLexer {
         return Some(Ok(()));
     }
 
-    pub fn lex_file(path: PathBuf) -> std::io::Result<FileLexer> {
-        let file = File::open(path)?;
+    pub fn lex_file(path: PathBuf) -> super::PResult<FileLexer> {
+        let file = File::open(path).map_err(|e| Error {
+            pos: Position { line: 0, char: 0 },
+            error: super::ParseErrorType::FileError(e),
+        })?;
 
         Ok(FileLexer {
             file: BufReader::new(file),
@@ -63,7 +74,7 @@ impl FileLexer {
 }
 
 impl Iterator for FileLexer {
-    type Item = std::io::Result<Token>;
+    type Item = super::PResult<Token>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.current_line_tokens.len() > 0 {
@@ -115,18 +126,6 @@ pub enum RawToken {
     UnknownCharacter(char),
 }
 
-#[derive(Clone)]
-pub struct Position {
-    pub line: usize,
-    pub char: usize,
-}
-
-impl Debug for Position {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}:{}", self.line, self.char)
-    }
-}
-
 fn mark_token(token: RawToken, pos: Position) -> Token {
     Token { token, pos }
 }
@@ -138,7 +137,7 @@ pub struct Token {
 
 impl Debug for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}::{:?}", self.pos, self.token)
+        write!(f, "{:}::{:?}", self.pos, self.token)
     }
 }
 
