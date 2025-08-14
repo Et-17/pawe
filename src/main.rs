@@ -9,9 +9,12 @@ fn main() -> parser::PResult<()> {
 
     // lexer.for_each(|t| println!("{:?}", t.unwrap()));
 
-    let config = parser::parser::parse_config(&mut lexer.peekable())?;
+    let config_attempt = parser::parser::parse_config(&mut lexer.peekable());
 
-    println!("{:#?}", config);
+    match config_attempt {
+        Ok(config) => println!("{:#?}", config),
+        Err(errs) => errs.iter().for_each(|e| println!("{}", e)),
+    }
 
     return Ok(());
 }

@@ -4,113 +4,70 @@ use crate::config::Config;
 use crate::error_handling::{Error, Position};
 
 use super::lexer::{FileLexer, RawToken};
-use super::{PResult, ParseErrorType::*};
+use super::{PResult, PResultV, ParseErrorType::*};
 
-pub fn parse_config(file: &mut Peekable<FileLexer>) -> PResult<Config> {
+pub fn parse_config(file: &mut Peekable<FileLexer>) -> PResultV<Config> {
     let mut config = Config::new();
+    let mut errors = Vec::new();
 
     while let Some(token_res) = file.next() {
         let token = token_res?;
-        let token_type = token.token;
         let pos = token.pos;
 
-        match token_type {
-            RawToken::Languages => parse_languages(file, &mut config, pos)?,
-            RawToken::Features => parse_features(file, &mut config, pos)?,
-            RawToken::Parameters => parse_parameters(file, &mut config, pos)?,
-            RawToken::Characters => parse_characters(file, &mut config, pos)?,
-            RawToken::Evolve => parse_evolve(file, &mut config, pos)?,
-            _ => {
-                return Err(Error {
-                    pos,
-                    error: ExpectedBlockIdentifier,
-                });
-            }
+        let parsing_result = match token.token {
+            RawToken::Languages => parse_languages(file, &mut config, pos),
+            RawToken::Features => parse_features(file, &mut config, pos),
+            RawToken::Parameters => parse_parameters(file, &mut config, pos),
+            RawToken::Characters => parse_characters(file, &mut config, pos),
+            RawToken::Evolve => parse_evolve(file, &mut config, pos),
+            _ => Err(ExpectedBlockIdentifier.at(pos).into()),
+        };
+
+        if let Err(mut errs) = parsing_result {
+            errors.append(&mut errs);
         }
     }
 
-    return Ok(config);
+    if !errors.is_empty() {
+        Err(errors)
+    } else {
+        Ok(config)
+    }
 }
 
 pub fn parse_languages(
     file: &mut Peekable<FileLexer>,
     config: &mut Config,
     pos: Position,
-) -> PResult<()> {
-    confirm_token_type(file, RawToken::BlockOpen, ExpectedBlock, &pos)?;
+) -> PResultV<()> {
+    let languages = parse_identifier_block(file, pos)?;
 
-    let mut latest_pos = pos;
-
-    while let Some(token_res) = file.next() {
-        let token = token_res?;
-        latest_pos = token.pos;
-
-        match token.token {
-            RawToken::BlockClose => return Ok(()),
-            RawToken::UnmarkedIdentifier(ref lang) => add_language(config, lang.clone()),
-            _ => {
-                return Err(Error {
-                    pos: latest_pos,
-                    error: ExpectedIdentifier,
-                });
-            }
-        }
-
-        if check_token_type(file, RawToken::BlockClose)? {
-            return Ok(());
-        }
-
-        confirm_token_type(file, RawToken::EOL, ExpectedEOL, &latest_pos)?;
+    for language in languages {
+        add_language(config, language);
     }
 
-    Err(Error {
-        pos: latest_pos,
-        error: UnexpectedEOF,
-    })
+    Ok(())
 }
 
 pub fn parse_features(
     file: &mut Peekable<FileLexer>,
     config: &mut Config,
     pos: Position,
-) -> PResult<()> {
-    confirm_token_type(file, RawToken::BlockOpen, ExpectedBlock, &pos)?;
+) -> PResultV<()> {
+    let features = parse_identifier_block(file, pos)?;
 
-    let mut latest_pos = pos;
-
-    while let Some(token_res) = file.next() {
-        let token = token_res?;
-        latest_pos = token.pos;
-
-        match token.token {
-            RawToken::BlockClose => return Ok(()),
-            RawToken::UnmarkedIdentifier(ref feat) => add_feature(config, feat.clone()),
-            _ => {
-                return Err(Error {
-                    pos: latest_pos,
-                    error: ExpectedIdentifier,
-                });
-            }
-        }
-
-        if check_token_type(file, RawToken::BlockClose)? {
-            return Ok(());
-        }
-
-        confirm_token_type(file, RawToken::EOL, ExpectedEOL, &latest_pos)?;
+    for feature in features {
+        add_feature(config, feature);
     }
 
-    Err(Error {
-        pos: latest_pos,
-        error: UnexpectedEOF,
-    })
+    Ok(())
 }
 
 pub fn parse_parameters(
     file: &mut Peekable<FileLexer>,
     config: &mut Config,
     pos: Position,
-) -> PResult<()> {
+) -> PResultV<()> {
     // todo!("woopsy")
 
     while !check_token_type(file, RawToken::BlockClose)? {
@@ -127,7 +84,7 @@ pub fn parse_characters(
     file: &mut Peekable<FileLexer>,
     config: &mut Config,
     pos: Position,
-) -> PResult<()> {
+) -> PResultV<()> {
     // todo!("woopsy")
 
     while !check_token_type(file, RawToken::BlockClose)? {
@@ -141,7 +98,7 @@ pub fn parse_evolve(
     file: &mut Peekable<FileLexer>,
     config: &mut Config,
     pos: Position,
-) -> PResult<()> {
+) -> PResultV<()> {
     // todo!("woopsy")
 
     while !check_token_type(file, RawToken::BlockClose)? {
@@ -149,6 +106,51 @@ pub fn parse_evolve(
     }
 
     Ok(())
+}
+
+// Several syntax elements are composed of a block of lines containing a single
+// identifier, such as when defining languages, features, and parameters.
+// This will parse an identifier block and then return a vector.
+pub fn parse_identifier_block(
+    file: &mut Peekable<FileLexer>,
+    pos: Position,
+) -> PResultV<Vec<String>> {
+    confirm_token_type(file, RawToken::BlockOpen, ExpectedBlock, &pos)?;
+
+    let mut identifiers: Vec<String> = Vec::new();
+    let mut errors: Vec<Error<super::ParseErrorType>> = Vec::new();
+
+    let mut empty_line = true;
+    while let Some(token_res) = file.next() {
+        let token = token_res?;
+        let pos = token.pos;
+
+        // If we encounter the end of the block, we are done: end immediately.
+        // If we EOL, then reset the empty_line flag.
+        // If the line is not empty, then the only valid choice is EOL, which
+        //     was not seen: throw an error.
+        // We now know that we are on an empty line, so if we encounter an
+        //     unmarked identifier, then perfect: add it to the vector.
+        // If it was some other unknown token, then throw an error.
+        if token.token == RawToken::BlockClose {
+            break;
+        } else if token.token == RawToken::EOL {
+            empty_line = true;
+        } else if !empty_line {
+            errors.push(ExpectedEOL.at(pos));
+        } else if let RawToken::UnmarkedIdentifier(ident) = token.token {
+            identifiers.push(ident);
+            empty_line = false;
+        } else {
+            errors.push(ExpectedIdentifier.at(pos));
+        }
+    }
+
+    if !errors.is_empty() {
+        Err(errors)
+    } else {
+        Ok(identifiers)
+    }
 }
 
 // This function exists to change the return type of add to ()
@@ -171,7 +173,7 @@ pub fn confirm_token_type(
     pos: &Position,
 ) -> PResult<()> {
     if !check_token_type(file, desired)? {
-        Err(Error { pos: *pos, error })
+        Err(error.at(*pos))
     } else {
         Ok(())
     }

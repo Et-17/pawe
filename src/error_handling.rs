@@ -42,3 +42,13 @@ impl<T: ErrorType> Debug for Error<T> {
         write!(f, "{}", self)
     }
 }
+
+// This lets us use ? when we want to fully fail on single errors in a function
+// that returns a vector of errors, especially in parsing
+impl<T: ErrorType> From<Error<T>> for Vec<Error<T>> {
+    fn from(value: Error<T>) -> Self {
+        let mut errors = Vec::with_capacity(1);
+        errors.push(value);
+        return errors;
+    }
+}

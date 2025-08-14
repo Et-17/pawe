@@ -3,7 +3,7 @@ pub mod parser;
 
 use std::fmt::Display;
 
-use crate::error_handling::{Error, ErrorType};
+use crate::error_handling::{Error, ErrorType, Position};
 
 use lexer::Token;
 
@@ -38,6 +38,12 @@ impl Display for ParseErrorType {
     }
 }
 
+impl ParseErrorType {
+    fn at(self, pos: Position) -> Error<ParseErrorType> {
+        Error { pos, error: self }
+    }
+}
+
 impl PartialEq for ParseErrorType {
     fn eq(&self, other: &Self) -> bool {
         return std::mem::discriminant(self) == std::mem::discriminant(other);
@@ -45,3 +51,4 @@ impl PartialEq for ParseErrorType {
 }
 
 pub type PResult<T> = std::result::Result<T, Error<ParseErrorType>>;
+pub type PResultV<T> = std::result::Result<T, Vec<Error<ParseErrorType>>>;
