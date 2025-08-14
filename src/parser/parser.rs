@@ -16,6 +16,10 @@ pub fn parse_config(file: &mut Peekable<FileLexer>) -> PResult<Config> {
 
         match token_type {
             RawToken::Languages => parse_languages(file, &mut config, pos)?,
+            RawToken::Features => parse_features(file, &mut config, pos)?,
+            RawToken::Parameters => parse_parameters(file, &mut config, pos)?,
+            RawToken::Characters => parse_characters(file, &mut config, pos)?,
+            RawToken::Evolve => parse_evolve(file, &mut config, pos)?,
             _ => {
                 return Err(Error {
                     pos,
@@ -47,7 +51,7 @@ pub fn parse_languages(
             _ => {
                 return Err(Error {
                     pos: latest_pos,
-                    error: ExpectedLangName,
+                    error: ExpectedIdentifier,
                 });
             }
         }
@@ -65,9 +69,95 @@ pub fn parse_languages(
     })
 }
 
+pub fn parse_features(
+    file: &mut Peekable<FileLexer>,
+    config: &mut Config,
+    pos: Position,
+) -> PResult<()> {
+    confirm_token_type(file, RawToken::BlockOpen, ExpectedBlock, &pos)?;
+
+    let mut latest_pos = pos;
+
+    while let Some(token_res) = file.next() {
+        let token = token_res?;
+        latest_pos = token.pos;
+
+        match token.token {
+            RawToken::BlockClose => return Ok(()),
+            RawToken::UnmarkedIdentifier(ref feat) => add_feature(config, feat.clone()),
+            _ => {
+                return Err(Error {
+                    pos: latest_pos,
+                    error: ExpectedIdentifier,
+                });
+            }
+        }
+
+        if check_token_type(file, RawToken::BlockClose)? {
+            return Ok(());
+        }
+
+        confirm_token_type(file, RawToken::EOL, ExpectedEOL, &latest_pos)?;
+    }
+
+    Err(Error {
+        pos: latest_pos,
+        error: UnexpectedEOF,
+    })
+}
+
+pub fn parse_parameters(
+    file: &mut Peekable<FileLexer>,
+    config: &mut Config,
+    pos: Position,
+) -> PResult<()> {
+    // todo!("woopsy")
+
+    while !check_token_type(file, RawToken::BlockClose)? {
+        file.next();
+        while !check_token_type(file, RawToken::BlockClose)? {
+            file.next();
+        }
+    }
+
+    Ok(())
+}
+
+pub fn parse_characters(
+    file: &mut Peekable<FileLexer>,
+    config: &mut Config,
+    pos: Position,
+) -> PResult<()> {
+    // todo!("woopsy")
+
+    while !check_token_type(file, RawToken::BlockClose)? {
+        file.next();
+    }
+
+    Ok(())
+}
+
+pub fn parse_evolve(
+    file: &mut Peekable<FileLexer>,
+    config: &mut Config,
+    pos: Position,
+) -> PResult<()> {
+    // todo!("woopsy")
+
+    while !check_token_type(file, RawToken::BlockClose)? {
+        file.next();
+    }
+
+    Ok(())
+}
+
 // This function exists to change the return type of add to ()
 fn add_language(config: &mut Config, language: String) -> () {
     let _ = config.languages.add(language);
+}
+
+fn add_feature(config: &mut Config, feature: String) -> () {
+    let _ = config.features.add(feature);
 }
 
 // Confirms that the next token is of a specific type, returning a specified

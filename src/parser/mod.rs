@@ -12,7 +12,7 @@ pub enum ParseErrorType {
     ExpectedBlockIdentifier,
     ExpectedBlock,
     UnexpectedBlock,
-    ExpectedLangName, // empty line in languages block
+    ExpectedIdentifier, // empty line in languages or features block
     ExpectedEOL,
     UnexpectedEOF,
     // In case we need to note that a token has not been explicitly handled yet
@@ -29,7 +29,7 @@ impl Display for ParseErrorType {
             Self::ExpectedBlockIdentifier => write!(f, "Expected a block identifier keyword"),
             Self::ExpectedBlock => write!(f, "Expected a block"),
             Self::UnexpectedBlock => write!(f, "Unexpected block"),
-            Self::ExpectedLangName => write!(f, "Expected the name of a language"),
+            Self::ExpectedIdentifier => write!(f, "Expected identifier"),
             Self::ExpectedEOL => write!(f, "Expected end-of-line"),
             Self::UnexpectedEOF => write!(f, "File ended unexpectedly"),
             Self::UnhandledToken(token) => write!(f, "Unhandled token: {:?}", token),
