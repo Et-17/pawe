@@ -42,6 +42,8 @@ impl LabelEncoding {
 pub struct Config {
     pub languages: LabelEncoding,
     pub features: LabelEncoding,
+    pub parameters: LabelEncoding,
+    pub parameter_values: HashMap<u32, LabelEncoding>,
 }
 
 impl Config {
@@ -49,6 +51,8 @@ impl Config {
         Self {
             languages: LabelEncoding::new(),
             features: LabelEncoding::new(),
+            parameters: LabelEncoding::new(),
+            parameter_values: HashMap::new(),
         }
     }
 }

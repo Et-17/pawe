@@ -15,6 +15,9 @@ pub struct FileLexer {
     file: BufReader<File>,
     current_line_tokens: VecDeque<Token>,
     line_num: usize,
+    // Whether the current line is ended or not, so the lexer can insert an EOL
+    // before a block close if it's not
+    insert_eol: bool,
 }
 
 impl FileLexer {
@@ -69,6 +72,7 @@ impl FileLexer {
             file: BufReader::new(file),
             current_line_tokens: VecDeque::new(),
             line_num: 0,
+            insert_eol: false,
         })
     }
 }
@@ -77,17 +81,27 @@ impl Iterator for FileLexer {
     type Item = super::PResult<Token>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current_line_tokens.len() > 0 {
-            let next_token = self.current_line_tokens.pop_front()?;
-            return Some(Ok(next_token));
-        } else {
-            let line_lexing_res = self.lex_line()?;
-
-            return match line_lexing_res {
-                Err(e) => Some(Err(e)),
-                Ok(()) => self.next(),
-            };
+        while self.current_line_tokens.is_empty() {
+            if let Err(e) = self.lex_line()? {
+                return Some(Err(e));
+            }
         }
+
+        let next_token = self.current_line_tokens.pop_front()?;
+
+        if next_token.token == RawToken::BlockClose && self.insert_eol {
+            self.insert_eol = false;
+            let fake_eol = Token {
+                token: RawToken::EOL,
+                pos: next_token.pos,
+            };
+            self.current_line_tokens.push_front(next_token);
+            return Some(Ok(fake_eol));
+        }
+
+        self.insert_eol = next_token.token != RawToken::EOL;
+
+        Some(Ok(next_token))
     }
 }
 
@@ -160,7 +174,7 @@ impl MarkedChar {
 }
 
 fn intra_identifier_character(c: char) -> bool {
-    c.is_alphanumeric() || c == '.'
+    c.is_alphanumeric() || c == '.' || c == '_'
 }
 
 fn lex_raw_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> RawToken {

@@ -1,6 +1,6 @@
 use std::iter::Peekable;
 
-use crate::config::Config;
+use crate::config::{Config, LabelEncoding};
 use crate::error_handling::{Error, Position};
 
 use super::lexer::{FileLexer, RawToken};
@@ -43,7 +43,7 @@ pub fn parse_languages(
     let languages = parse_identifier_block(file, pos)?;
 
     for language in languages {
-        add_language(config, language);
+        config.languages.add(language);
     }
 
     Ok(())
@@ -57,7 +57,7 @@ pub fn parse_features(
     let features = parse_identifier_block(file, pos)?;
 
     for feature in features {
-        add_feature(config, feature);
+        config.features.add(feature);
     }
 
     Ok(())
@@ -68,16 +68,53 @@ pub fn parse_parameters(
     config: &mut Config,
     pos: Position,
 ) -> PResultV<()> {
-    // todo!("woopsy")
+    confirm_token_type(file, RawToken::BlockOpen, ExpectedBlock, &pos)?;
 
-    while !check_token_type(file, RawToken::BlockClose)? {
-        file.next();
-        while !check_token_type(file, RawToken::BlockClose)? {
-            file.next();
+    let mut errors: Vec<Error<super::ParseErrorType>> = Vec::new();
+
+    while file.peek().is_some() {
+        if check_token_type(file, RawToken::BlockClose)? {
+            break;
+        }
+
+        let next_def_res = parse_parameter_def(file, config, pos);
+        if let Err(mut errs) = next_def_res {
+            errors.append(&mut errs);
         }
     }
 
-    Ok(())
+    if !errors.is_empty() {
+        Err(errors)
+    } else {
+        Ok(())
+    }
+}
+
+pub fn parse_parameter_def(
+    file: &mut Peekable<FileLexer>,
+    config: &mut Config,
+    pos: Position,
+) -> PResultV<()> {
+    let name: String;
+    match file.next().transpose()? {
+        Some(token) => match token.token {
+            RawToken::EOL => return Ok(()),
+            RawToken::UnmarkedIdentifier(ident) => name = ident,
+            _ => return Err(ExpectedIdentifier.at(pos).into()),
+        },
+        None => return Ok(()),
+    }
+
+    let values = parse_identifier_block(file, pos)?;
+    let mut value_labels = LabelEncoding::new();
+    for value in values {
+        value_labels.add(value);
+    }
+
+    let new_code = config.parameters.add(name);
+    config.parameter_values.insert(new_code, value_labels);
+
+    return Ok(());
 }
 
 pub fn parse_characters(
@@ -111,6 +148,7 @@ pub fn parse_evolve(
 // Several syntax elements are composed of a block of lines containing a single
 // identifier, such as when defining languages, features, and parameters.
 // This will parse an identifier block and then return a vector.
+// TODO: Currently this won't error if the file ends while the block is open
 pub fn parse_identifier_block(
     file: &mut Peekable<FileLexer>,
     pos: Position,
@@ -151,15 +189,6 @@ pub fn parse_identifier_block(
     } else {
         Ok(identifiers)
     }
-}
-
-// This function exists to change the return type of add to ()
-fn add_language(config: &mut Config, language: String) -> () {
-    let _ = config.languages.add(language);
-}
-
-fn add_feature(config: &mut Config, feature: String) -> () {
-    let _ = config.features.add(feature);
 }
 
 // Confirms that the next token is of a specific type, returning a specified
