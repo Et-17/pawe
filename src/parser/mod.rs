@@ -5,7 +5,7 @@ use std::fmt::Display;
 
 use crate::error_handling::{Error, ErrorType, Position};
 
-use lexer::Token;
+use lexer::{RawToken, Token};
 
 #[derive(Debug)]
 pub enum ParseErrorType {
@@ -16,6 +16,13 @@ pub enum ParseErrorType {
     Redefinition,       // attempted to redefine something
     ExpectedEOL,
     UnexpectedEOF,
+    UndefinedFeature(String),
+    UndefinedParameter(String),
+    UndefinedParameterVariant(String, String),
+    MalformedParameter(String),
+    UnexpectedToken(RawToken),
+    ExpectedPhoneme,
+    NegativeParameterInConcrete,
     // In case we need to note that a token has not been explicitly handled yet
     // but it should be. This is an issue with PAWE, not the code
     UnhandledToken(Token),
@@ -34,7 +41,21 @@ impl Display for ParseErrorType {
             Self::Redefinition => write!(f, "Attempted to redefine something"),
             Self::ExpectedEOL => write!(f, "Expected end-of-line"),
             Self::UnexpectedEOF => write!(f, "File ended unexpectedly"),
+            Self::UndefinedFeature(feat) => write!(f, "Could not find feature `{}`", feat),
+            Self::UndefinedParameter(param) => write!(f, "Could not find parameter `{}`", param),
+            Self::UndefinedParameterVariant(param, var) => write!(
+                f,
+                "Could not find variant `{}` in parameter `{}`",
+                var, param
+            ),
+            Self::MalformedParameter(param) => write!(f, "`{}` is not a valid parameter", param),
+            Self::NegativeParameterInConcrete => write!(
+                f,
+                "Negative parameters are not allowed in concrete phonemes"
+            ),
+            Self::UnexpectedToken(token) => write!(f, "Unexpected token {:?}", token),
             Self::UnhandledToken(token) => write!(f, "Unhandled token: {:?}", token),
+            Self::ExpectedPhoneme => write!(f, "Expected a phoneme"),
             Self::FileError(e) => write!(f, "File error: {}", e),
         }
     }

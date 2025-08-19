@@ -22,19 +22,34 @@ impl LabelEncoding {
             return *preëxisting_code;
         }
 
-        let code = *self.encode.entry(label.clone()).or_insert(self.next_code);
-        self.decode.entry(code).or_insert(label);
+        self.encode.insert(label.clone(), self.next_code);
+        self.decode.insert(self.next_code, label);
 
         self.next_code += 1;
-        return code;
+        return self.next_code - 1;
     }
 
-    pub fn encode(&self, label: String) -> Option<&u32> {
-        self.encode.get(&label)
+    pub fn encode(&self, label: &String) -> Option<&u32> {
+        self.encode.get(label)
     }
 
-    pub fn decode(&self, code: u32) -> Option<&String> {
-        self.decode.get(&code)
+    pub fn decode(&self, code: &u32) -> Option<&String> {
+        self.decode.get(code)
+    }
+}
+
+#[derive(Debug)]
+pub struct ConcretePhoneme {
+    pub features: HashMap<u32, bool>,
+    pub parameters: HashMap<u32, u32>,
+}
+
+impl ConcretePhoneme {
+    pub fn new() -> Self {
+        Self {
+            features: HashMap::new(),
+            parameters: HashMap::new(),
+        }
     }
 }
 
@@ -44,6 +59,7 @@ pub struct Config {
     pub features: LabelEncoding,
     pub parameters: LabelEncoding,
     pub parameter_values: HashMap<u32, LabelEncoding>,
+    pub characters: HashMap<String, ConcretePhoneme>,
 }
 
 impl Config {
@@ -53,6 +69,7 @@ impl Config {
             features: LabelEncoding::new(),
             parameters: LabelEncoding::new(),
             parameter_values: HashMap::new(),
+            characters: HashMap::new(),
         }
     }
 }

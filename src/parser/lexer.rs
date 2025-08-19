@@ -133,9 +133,9 @@ pub enum RawToken {
     ConcretePhonemeClose,              // ]
 
     // General tokens
-    PositiveIdentifier(String), // +███
-    NegativeIdentifier(String), // -███
-    UnmarkedIdentifier(String), //  ███
+    MarkedFeature(bool, String),           // ±███
+    MarkedParameter(bool, String, String), // ±███.███
+    UnmarkedIdentifier(String),            //  ███
 
     UnknownCharacter(char),
 }
@@ -177,12 +177,14 @@ fn intra_identifier_character(c: char) -> bool {
     c.is_alphanumeric() || c == '.' || c == '_'
 }
 
-fn lex_raw_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> RawToken {
-    // let identifier = line.peeking_take_while(|c| c.grapheme.is_alphanumeric()).map(|c| c.grapheme).collect();
-    let identifier = line
-        .peeking_take_while(|c| intra_identifier_character(c.grapheme))
+fn read_raw_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> String {
+    line.peeking_take_while(|c| intra_identifier_character(c.grapheme))
         .map(|c| c.grapheme)
-        .collect();
+        .collect()
+}
+
+fn lex_raw_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> RawToken {
+    let identifier = read_raw_identifier(line);
 
     // Check if this is the opening of a tagged matching phoneme
     if line.peeking_next(|c| c.grapheme == '(').is_some() {
@@ -200,20 +202,17 @@ fn lex_raw_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) ->
     };
 }
 
-fn lex_pos_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> RawToken {
-    let identifier = line
-        .peeking_take_while(|c| intra_identifier_character(c.grapheme))
-        .map(|c| c.grapheme)
-        .collect();
-    return RawToken::PositiveIdentifier(identifier);
-}
+fn lex_marked_identifier<T: Iterator<Item = MarkedChar>>(
+    line: &mut Peekable<T>,
+    mark: bool,
+) -> RawToken {
+    let identifier = read_raw_identifier(line);
 
-fn lex_neg_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> RawToken {
-    let identifier = line
-        .peeking_take_while(|c| intra_identifier_character(c.grapheme))
-        .map(|c| c.grapheme)
-        .collect();
-    return RawToken::NegativeIdentifier(identifier);
+    if let Some((name, variant)) = identifier.split_once('.') {
+        RawToken::MarkedParameter(mark, name.to_string(), variant.to_string())
+    } else {
+        RawToken::MarkedFeature(mark, identifier)
+    }
 }
 
 fn lex_token<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> Option<Token> {
@@ -228,10 +227,10 @@ fn lex_token<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> Option<T
             return Some(mark_token(lex_raw_identifier(line), pos));
         } else if c == '+' {
             line.next();
-            return Some(mark_token(lex_pos_identifier(line), pos));
+            return Some(mark_token(lex_marked_identifier(line, true), pos));
         } else if c == '-' {
             line.next();
-            return Some(mark_token(lex_neg_identifier(line), pos));
+            return Some(mark_token(lex_marked_identifier(line, false), pos));
         }
 
         let to_return = match c {

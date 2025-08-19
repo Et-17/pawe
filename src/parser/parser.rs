@@ -1,6 +1,6 @@
 use std::iter::Peekable;
 
-use crate::config::{Config, LabelEncoding};
+use crate::config::{ConcretePhoneme, Config, LabelEncoding};
 use crate::error_handling::{Error, Position};
 
 use super::lexer::{FileLexer, RawToken};
@@ -122,13 +122,77 @@ pub fn parse_characters(
     config: &mut Config,
     pos: Position,
 ) -> PResultV<()> {
-    // todo!("woopsy")
+    confirm_token_type(file, RawToken::BlockOpen, ExpectedBlock, &pos)?;
 
-    while !check_token_type(file, RawToken::BlockClose)? {
-        file.next();
+    let mut errors: Vec<Error<super::ParseErrorType>> = Vec::new();
+
+    while file.peek().is_some() {
+        if check_token_type(file, RawToken::BlockClose)? {
+            break;
+        }
+
+        let next_def_res = parse_character_def(file, config, pos);
+        if let Err(mut errs) = next_def_res {
+            errors.append(&mut errs);
+        }
     }
 
-    Ok(())
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors)
+    }
+}
+
+pub fn parse_character_def(
+    file: &mut Peekable<FileLexer>,
+    config: &mut Config,
+    pos: Position,
+) -> PResultV<()> {
+    let mut errors = Vec::new();
+
+    let char: String;
+    let char_pos: Position;
+    match file.next().transpose()? {
+        Some(token) => match token.token {
+            RawToken::EOL => return Ok(()),
+            RawToken::UnmarkedIdentifier(ident) => {
+                char = ident;
+                char_pos = token.pos;
+            }
+            _ => return Err(ExpectedIdentifier.at(pos).into()),
+        },
+        None => return Ok(()),
+    }
+
+    if let Some(token) = file.next().transpose()? {
+        if token.token != RawToken::ConcretePhonemeOpen {
+            errors.push(ExpectedPhoneme.at(pos));
+            return Err(errors);
+        }
+    } else {
+        errors.push(ExpectedPhoneme.at(pos));
+        return Err(errors);
+    }
+    let phoneme = parse_concrete_phoneme(file, config)?;
+
+    if let Some(_) = config.characters.insert(char, phoneme) {
+        errors.push(Redefinition.at(char_pos));
+    }
+
+    while let Some(token) = file.next().transpose()? {
+        if token.token == RawToken::EOL {
+            break;
+        } else {
+            errors.push(ExpectedEOL.at(token.pos));
+        }
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors)
+    }
 }
 
 pub fn parse_evolve(
@@ -188,6 +252,69 @@ pub fn parse_identifier_block(
         Err(errors)
     } else {
         Ok(identifiers)
+    }
+}
+
+// This function assumes that the opening [ has already been consumed
+pub fn parse_concrete_phoneme(
+    file: &mut Peekable<FileLexer>,
+    config: &mut Config,
+) -> PResultV<ConcretePhoneme> {
+    let mut phoneme = ConcretePhoneme::new();
+    let mut errors: Vec<Error<super::ParseErrorType>> = Vec::new();
+
+    while let Some(token) = file.next().transpose()? {
+        match token.token {
+            RawToken::ConcretePhonemeClose => break,
+            RawToken::MarkedFeature(mark, feat) => {
+                if let Some(code) = config.features.encode(&feat) {
+                    phoneme.features.insert(*code, mark);
+                } else {
+                    errors.push(UndefinedFeature(feat).at(token.pos));
+                }
+            }
+            RawToken::MarkedParameter(true, param, variant) => {
+                match encode_parameter(config, &param, &variant, token.pos) {
+                    Ok((p_code, v_code)) => {
+                        phoneme.parameters.insert(p_code, v_code);
+                    }
+                    Err(e) => errors.push(e),
+                }
+            }
+            RawToken::MarkedParameter(false, _, _) => {
+                errors.push(NegativeParameterInConcrete.at(token.pos))
+            }
+            unknown => {
+                errors.push(UnexpectedToken(unknown).at(token.pos));
+            }
+        };
+    }
+
+    if errors.is_empty() {
+        Ok(phoneme)
+    } else {
+        Err(errors)
+    }
+}
+
+pub fn encode_parameter(
+    config: &mut Config,
+    parameter: &String,
+    variant: &String,
+    pos: Position,
+) -> PResult<(u32, u32)> {
+    if let Some(&name_code) = config.parameters.encode(parameter) {
+        let variant_encoding = config
+            .parameter_values
+            .entry(name_code)
+            .or_insert(LabelEncoding::new());
+        if let Some(&variant_code) = variant_encoding.encode(variant) {
+            Ok((name_code, variant_code))
+        } else {
+            Err(UndefinedParameterVariant(parameter.to_owned(), variant.to_owned()).at(pos))
+        }
+    } else {
+        Err(UndefinedParameter(parameter.to_owned()).at(pos))
     }
 }
 
