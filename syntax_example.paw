@@ -33,6 +33,7 @@ features {
 
 characters {
     m [+type.consonant +place.bilabial +manner.nasal -lateral +voiced +length.short];
+	n [m +place.alveolar];
     t [+type.consonant +place.alveolar +manner.plosive -lateral -voiced +length.short];
     s [+type.consonant +place.alveolar +manner.fricative -lateral -voiced +length.short];
     l [+type.consonant +place.alveolar +manner.approximant +lateral +voiced +length.short];

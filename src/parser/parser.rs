@@ -1,7 +1,8 @@
 use std::iter::Peekable;
 
-use crate::config::{ConcretePhoneme, Config, LabelEncoding};
+use crate::config::{Config, LabelEncoding};
 use crate::error_handling::{Error, Position};
+use crate::phonemes::Phoneme;
 
 use super::lexer::{FileLexer, RawToken};
 use super::{PResult, PResultV, ParseErrorType::*};
@@ -166,7 +167,7 @@ pub fn parse_character_def(
     }
 
     if let Some(token) = file.next().transpose()? {
-        if token.token != RawToken::ConcretePhonemeOpen {
+        if token.token != RawToken::PhonemeOpen {
             errors.push(ExpectedPhoneme.at(pos));
             return Err(errors);
         }
@@ -174,7 +175,7 @@ pub fn parse_character_def(
         errors.push(ExpectedPhoneme.at(pos));
         return Err(errors);
     }
-    let phoneme = parse_concrete_phoneme(file, config)?;
+    let phoneme = parse_phoneme(file, config)?;
 
     if let Some(_) = config.characters.insert(char, phoneme) {
         errors.push(Redefinition.at(char_pos));
@@ -195,11 +196,7 @@ pub fn parse_character_def(
     }
 }
 
-pub fn parse_evolve(
-    file: &mut Peekable<FileLexer>,
-    config: &mut Config,
-    pos: Position,
-) -> PResultV<()> {
+pub fn parse_evolve(file: &mut Peekable<FileLexer>, _: &mut Config, _: Position) -> PResultV<()> {
     // todo!("woopsy")
 
     while !check_token_type(file, RawToken::BlockClose)? {
@@ -256,16 +253,14 @@ pub fn parse_identifier_block(
 }
 
 // This function assumes that the opening [ has already been consumed
-pub fn parse_concrete_phoneme(
-    file: &mut Peekable<FileLexer>,
-    config: &mut Config,
-) -> PResultV<ConcretePhoneme> {
-    let mut phoneme = ConcretePhoneme::new();
+pub fn parse_phoneme(file: &mut Peekable<FileLexer>, config: &mut Config) -> PResultV<Phoneme> {
+    let mut phoneme = Phoneme::new();
     let mut errors: Vec<Error<super::ParseErrorType>> = Vec::new();
 
+    // There is no way this is optimized, but I'll deal with that later
     while let Some(token) = file.next().transpose()? {
         match token.token {
-            RawToken::ConcretePhonemeClose => break,
+            RawToken::PhonemeClose => break,
             RawToken::MarkedFeature(mark, feat) => {
                 if let Some(code) = config.features.encode(&feat) {
                     phoneme.features.insert(*code, mark);
@@ -281,8 +276,15 @@ pub fn parse_concrete_phoneme(
                     Err(e) => errors.push(e),
                 }
             }
+            RawToken::UnmarkedIdentifier(ident) => {
+                if let Some(char_phoneme) = config.characters.get(&ident) {
+                    phoneme.add_phoneme(char_phoneme);
+                } else {
+                    errors.push(UndefinedCharacter(ident).at(token.pos));
+                }
+            }
             RawToken::MarkedParameter(false, _, _) => {
-                errors.push(NegativeParameterInConcrete.at(token.pos))
+                errors.push(NegativeParameterInPhoneme.at(token.pos))
             }
             unknown => {
                 errors.push(UnexpectedToken(unknown).at(token.pos));

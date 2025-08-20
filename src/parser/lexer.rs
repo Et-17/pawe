@@ -124,13 +124,13 @@ pub enum RawToken {
     Comment,       // //
 
     // Section markers
-    BlockOpen,                         // {
-    BlockClose,                        // }
-    MatchingPhonemeOpen,               // (
-    TaggedMatchingPhonemeOpen(String), // █(
-    MatchingPhonemeClose,              // )
-    ConcretePhonemeOpen,               // [
-    ConcretePhonemeClose,              // ]
+    BlockOpen,            // {
+    BlockClose,           // }
+    FilterOpen,           // (
+    SelectorOpen(String), // █(
+    FilterSelectorClose,  // )
+    PhonemeOpen,          // [
+    PhonemeClose,         // ]
 
     // General tokens
     MarkedFeature(bool, String),           // ±███
@@ -186,9 +186,9 @@ fn read_raw_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -
 fn lex_raw_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> RawToken {
     let identifier = read_raw_identifier(line);
 
-    // Check if this is the opening of a tagged matching phoneme
+    // Check if this is the opening of a selector
     if line.peeking_next(|c| c.grapheme == '(').is_some() {
-        return RawToken::TaggedMatchingPhonemeOpen(identifier);
+        return RawToken::SelectorOpen(identifier);
     }
 
     return match identifier.as_str() {
@@ -242,10 +242,10 @@ fn lex_token<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> Option<T
 
             '{' => RawToken::BlockOpen,
             '}' => RawToken::BlockClose,
-            '(' => RawToken::MatchingPhonemeOpen,
-            ')' => RawToken::MatchingPhonemeClose,
-            '[' => RawToken::ConcretePhonemeOpen,
-            ']' => RawToken::ConcretePhonemeClose,
+            '(' => RawToken::FilterOpen,
+            ')' => RawToken::FilterSelectorClose,
+            '[' => RawToken::PhonemeOpen,
+            ']' => RawToken::PhonemeClose,
 
             unknown => RawToken::UnknownCharacter(unknown),
         };

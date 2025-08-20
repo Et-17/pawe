@@ -1,3 +1,4 @@
+use crate::phonemes::Phoneme;
 use std::collections::HashMap;
 
 #[derive(Debug)]
@@ -39,27 +40,12 @@ impl LabelEncoding {
 }
 
 #[derive(Debug)]
-pub struct ConcretePhoneme {
-    pub features: HashMap<u32, bool>,
-    pub parameters: HashMap<u32, u32>,
-}
-
-impl ConcretePhoneme {
-    pub fn new() -> Self {
-        Self {
-            features: HashMap::new(),
-            parameters: HashMap::new(),
-        }
-    }
-}
-
-#[derive(Debug)]
 pub struct Config {
     pub languages: LabelEncoding,
     pub features: LabelEncoding,
     pub parameters: LabelEncoding,
     pub parameter_values: HashMap<u32, LabelEncoding>,
-    pub characters: HashMap<String, ConcretePhoneme>,
+    pub characters: HashMap<String, Phoneme>,
 }
 
 impl Config {

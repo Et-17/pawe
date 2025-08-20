@@ -19,10 +19,11 @@ pub enum ParseErrorType {
     UndefinedFeature(String),
     UndefinedParameter(String),
     UndefinedParameterVariant(String, String),
+    UndefinedCharacter(String),
     MalformedParameter(String),
     UnexpectedToken(RawToken),
     ExpectedPhoneme,
-    NegativeParameterInConcrete,
+    NegativeParameterInPhoneme,
     // In case we need to note that a token has not been explicitly handled yet
     // but it should be. This is an issue with PAWE, not the code
     UnhandledToken(Token),
@@ -48,10 +49,11 @@ impl Display for ParseErrorType {
                 "Could not find variant `{}` in parameter `{}`",
                 var, param
             ),
+            Self::UndefinedCharacter(c) => write!(f, "Could not find character `{}`", c),
             Self::MalformedParameter(param) => write!(f, "`{}` is not a valid parameter", param),
-            Self::NegativeParameterInConcrete => write!(
+            Self::NegativeParameterInPhoneme => write!(
                 f,
-                "Negative parameters are not allowed in concrete phonemes"
+                "Negative parameters are only allowed in filters and selectors, not phonemes"
             ),
             Self::UnexpectedToken(token) => write!(f, "Unexpected token {:?}", token),
             Self::UnhandledToken(token) => write!(f, "Unhandled token: {:?}", token),

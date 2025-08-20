@@ -3,6 +3,7 @@ use crate::parser::lexer::FileLexer;
 mod config;
 mod error_handling;
 mod parser;
+mod phonemes;
 
 fn main() -> parser::PResult<()> {
     let lexer = FileLexer::lex_file("syntax_example.paw".into())?;
