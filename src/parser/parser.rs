@@ -7,12 +7,15 @@ use crate::phonemes::{Attribute, Filter, Phoneme, Selector, SelectorCode, Unboun
 use super::lexer::{FileLexer, RawToken, Token};
 use super::{PResult, PResultV, ParseErrorType::*};
 
-pub fn parse_config(file: &mut FileLexer) -> PResultV<Config> {
+pub fn parse_config_file(file: &mut FileLexer) -> PResultV<Config> {
+    file.process_results(|mut tokens| parse_config(&mut tokens))?
+}
+
+fn parse_config(file: &mut impl Iterator<Item = Token>) -> PResultV<Config> {
     let mut config = Config::new();
     let mut errors = Vec::new();
 
-    while let Some(token_res) = file.next() {
-        let token = token_res?;
+    while let Some(token) = file.next() {
         let pos = token.pos;
 
         let parsing_result = match token.token {
@@ -29,76 +32,70 @@ pub fn parse_config(file: &mut FileLexer) -> PResultV<Config> {
         }
     }
 
-    if errors.is_empty() {
-        Ok(config)
-    } else {
-        Err(errors)
-    }
+    check_error_vec(config, errors)
 }
 
-fn parse_languages(file: &mut FileLexer, config: &mut Config, pos: Position) -> PResultV<()> {
+fn parse_languages(
+    file: &mut impl Iterator<Item = Token>,
+    config: &mut Config,
+    pos: Position,
+) -> PResultV<()> {
     confirm_token_type(file, RawToken::BlockOpen, ExpectedBlock, pos)?;
     let languages = parse_identifier_block(file)?;
 
-    for language in languages {
-        config.languages.add(language);
-    }
+    config.languages.extend(languages);
 
     Ok(())
 }
 
-fn parse_features(file: &mut FileLexer, config: &mut Config, pos: Position) -> PResultV<()> {
+fn parse_features(
+    file: &mut impl Iterator<Item = Token>,
+    config: &mut Config,
+    pos: Position,
+) -> PResultV<()> {
     confirm_token_type(file, RawToken::BlockOpen, ExpectedBlock, pos)?;
     let features = parse_identifier_block(file)?;
 
-    for feature in features {
-        config.features.add(feature);
-    }
+    config.features.extend(features);
 
     Ok(())
 }
 
-fn parse_parameters(file: &mut FileLexer, config: &mut Config, pos: Position) -> PResultV<()> {
+fn parse_parameters(
+    file: &mut impl Iterator<Item = Token>,
+    config: &mut Config,
+    pos: Position,
+) -> PResultV<()> {
     confirm_token_type(file, RawToken::BlockOpen, ExpectedBlock, pos)?;
 
     let mut errors: Vec<Error<super::ParseErrorType>> = Vec::new();
 
-    while let Some(token) = file.next().transpose()? {
+    while let Some(token) = file.next() {
         if token.token == RawToken::BlockClose {
             break;
+        } else if token.token == RawToken::EOL {
+            continue;
         }
 
-        let next_def_res = parse_parameter_def(file, config, token);
-        if let Err(mut errs) = next_def_res {
+        if let Err(mut errs) = parse_parameter_def(file, config, token) {
             errors.append(&mut errs);
         }
     }
 
-    if errors.is_empty() {
-        Ok(())
-    } else {
-        Err(errors)
-    }
+    check_error_vec((), errors)
 }
 
 fn parse_parameter_def(
-    file: &mut FileLexer,
+    file: &mut impl Iterator<Item = Token>,
     config: &mut Config,
     name_token: Token,
 ) -> PResultV<()> {
-    let name: String;
-    match name_token.token {
-        RawToken::EOL => return Ok(()),
-        RawToken::UnmarkedIdentifier(ident) => name = ident,
-        _ => return Err(ExpectedIdentifier.at(name_token.pos).into()),
-    }
+    let RawToken::UnmarkedIdentifier(name) = name_token.token else {
+        return Err(ExpectedIdentifier.at(name_token.pos).into());
+    };
 
     confirm_token_type(file, RawToken::BlockOpen, ExpectedBlock, name_token.pos)?;
-    let values = parse_identifier_block(file)?;
-    let mut value_labels = LabelEncoding::new();
-    for value in values {
-        value_labels.add(value);
-    }
+    let value_labels = parse_identifier_block(file)?.into();
 
     let new_code = config.parameters.add(name);
     config.parameter_values.insert(new_code, value_labels);
@@ -106,46 +103,45 @@ fn parse_parameter_def(
     Ok(())
 }
 
-fn parse_characters(file: &mut FileLexer, config: &mut Config, pos: Position) -> PResultV<()> {
+fn parse_characters(
+    file: &mut impl Iterator<Item = Token>,
+    config: &mut Config,
+    pos: Position,
+) -> PResultV<()> {
+    let mut errors = Vec::new();
+
     confirm_token_type(file, RawToken::BlockOpen, ExpectedBlock, pos)?;
-
-    let mut errors: Vec<Error<super::ParseErrorType>> = Vec::new();
-
-    while let Some(token) = file.next().transpose()? {
+    let mut def_block = file.take_while(end_block);
+    while let Some(token) = def_block.next() {
         if token.token == RawToken::BlockClose {
             break;
+        } else if token.token == RawToken::EOL {
+            continue;
         }
 
-        let next_def_res = parse_character_def(file, config, token);
+        let next_def_res = parse_character_def(&mut def_block, config, token);
         if let Err(mut errs) = next_def_res {
             errors.append(&mut errs);
         }
 
-        if let Err(mut errs) = end_line(file) {
+        if let Err(mut errs) = end_line(&mut def_block) {
             errors.append(&mut errs);
         }
     }
 
-    if errors.is_empty() {
-        Ok(())
-    } else {
-        Err(errors)
-    }
+    check_error_vec((), errors)
 }
 
 // WARNING: This will not clear until EOL, the calling function must ensure the
 // line ends properly
 fn parse_character_def(
-    file: &mut FileLexer,
+    file: &mut impl Iterator<Item = Token>,
     config: &mut Config,
     char_token: Token,
 ) -> PResultV<()> {
-    let char: String;
-    match char_token.token {
-        RawToken::EOL => return Ok(()),
-        RawToken::UnmarkedIdentifier(ident) => char = ident,
-        _ => return Err(ExpectedIdentifier.at(char_token.pos).into()),
-    }
+    let RawToken::UnmarkedIdentifier(char) = char_token.token else {
+        return Err(ExpectedIdentifier.at(char_token.pos).into());
+    };
 
     confirm_token_type(file, RawToken::PhonemeOpen, ExpectedPhoneme, char_token.pos)?;
     let phoneme = parse_phoneme(file, config)?;
@@ -157,14 +153,15 @@ fn parse_character_def(
     Ok(())
 }
 
-fn parse_evolve(file: &mut FileLexer, _: &mut Config, _: Position) -> PResultV<()> {
+fn parse_evolve(
+    file: &mut impl Iterator<Item = Token>,
+    _: &mut Config,
+    _: Position,
+) -> PResultV<()> {
     // todo!("woopsy")
 
-    while let Some(token) = file.next().transpose()? {
-        if token.token == RawToken::BlockClose {
-            break;
-        }
-    }
+    file.take_while(|token| token.token != RawToken::BlockClose)
+        .count();
 
     Ok(())
 }
@@ -172,57 +169,42 @@ fn parse_evolve(file: &mut FileLexer, _: &mut Config, _: Position) -> PResultV<(
 // Several syntax elements are composed of a block of lines containing a single
 // identifier, such as when defining languages, features, and parameters.
 // This will parse an identifier block and then return a vector.
-// TODO: Currently this won't error if the file ends while the block is open
-fn parse_identifier_block(file: &mut FileLexer) -> PResultV<Vec<String>> {
+fn parse_identifier_block(file: &mut impl Iterator<Item = Token>) -> PResultV<Vec<String>> {
     let mut identifiers: Vec<String> = Vec::new();
     let mut errors: Vec<Error<super::ParseErrorType>> = Vec::new();
 
+    // If we encounter the end of the block, we are done: end immediately.
+    // If we EOL, then reset the empty_line flag.
+    // If the line is not empty, then the only valid choice is EOL, which
+    //     was not seen: throw an error.
+    // We now know that we are on an empty line, so if we encounter an
+    //     unmarked identifier, then perfect: add it to the vector.
+    // If it was some other unknown token, then throw an error.
     let mut empty_line = true;
-    while let Some(token_res) = file.next() {
-        let token = token_res?;
-        let pos = token.pos;
-
-        // If we encounter the end of the block, we are done: end immediately.
-        // If we EOL, then reset the empty_line flag.
-        // If the line is not empty, then the only valid choice is EOL, which
-        //     was not seen: throw an error.
-        // We now know that we are on an empty line, so if we encounter an
-        //     unmarked identifier, then perfect: add it to the vector.
-        // If it was some other unknown token, then throw an error.
-        if token.token == RawToken::BlockClose {
-            break;
-        } else if token.token == RawToken::EOL {
+    for token in file.take_while(end_block) {
+        if token.token == RawToken::EOL {
             empty_line = true;
         } else if !empty_line {
-            errors.push(ExpectedEOL.at(pos));
+            errors.push(ExpectedEOL.at(token.pos));
         } else if let RawToken::UnmarkedIdentifier(ident) = token.token {
             identifiers.push(ident);
             empty_line = false;
         } else {
-            errors.push(ExpectedIdentifier.at(pos));
+            errors.push(ExpectedIdentifier.at(token.pos));
         }
     }
 
-    if errors.is_empty() {
-        Ok(identifiers)
-    } else {
-        Err(errors)
-    }
+    check_error_vec(identifiers, errors)
 }
 
-fn parse_phoneme(file: &mut FileLexer, config: &mut Config) -> PResultV<Phoneme> {
+fn parse_phoneme(file: &mut impl Iterator<Item = Token>, config: &mut Config) -> PResultV<Phoneme> {
     let attributes = parse_attribute_list(file, config, true)?;
 
-    let mut phoneme = Phoneme::new();
-    for attribute in attributes {
-        phoneme.add_attribute(attribute);
-    }
-
-    Ok(phoneme)
+    Ok(Phoneme::from_attributes(attributes))
 }
 
 fn parse_selector(
-    file: &mut FileLexer,
+    file: &mut impl Iterator<Item = Token>,
     config: &mut Config,
     code: SelectorCode,
 ) -> PResultV<Selector> {
@@ -232,21 +214,16 @@ fn parse_selector(
     })
 }
 
-fn parse_filter(file: &mut FileLexer, config: &mut Config) -> PResultV<Filter> {
+fn parse_filter(file: &mut impl Iterator<Item = Token>, config: &mut Config) -> PResultV<Filter> {
     let attributes = parse_attribute_list(file, config, false)?;
 
-    let mut filter = Filter::new();
-    attributes
-        .into_iter()
-        .for_each(|attribute| filter.add_attribute(attribute));
-
-    Ok(filter)
+    Ok(Filter::from_attributes(attributes))
 }
 
 // This parses the internals of phonemes, selectors, and filters into a list of
 // attributes that other functions can process
 fn parse_attribute_list(
-    file: &mut FileLexer,
+    file: &mut impl Iterator<Item = Token>,
     config: &mut Config,
     is_phoneme: bool,
 ) -> PResultV<Vec<Attribute>> {
@@ -255,18 +232,12 @@ fn parse_attribute_list(
         false => RawToken::FilterSelectorClose,
     };
 
-    let (attributes, errors): (Vec<_>, Vec<_>) = file.process_results(|block| {
-        block
-            .take_while(|token| token.token != close_token)
-            .map(|token| parse_attribute(config, token, !is_phoneme))
-            .partition_result()
-    })?;
+    let (attributes, errors): (Vec<_>, Vec<_>) = file
+        .take_while(|token| token.token != close_token)
+        .map(|token| parse_attribute(config, token, !is_phoneme))
+        .partition_result();
 
-    if errors.is_empty() {
-        Ok(attributes)
-    } else {
-        Err(errors)
-    }
+    check_error_vec(attributes, errors)
 }
 
 fn parse_attribute(config: &mut Config, token: Token, allow_neg_param: bool) -> PResult<Attribute> {
@@ -305,20 +276,18 @@ fn parse_parameter(
         return Err(NegativeParameterInPhoneme.at(pos));
     }
 
-    if let Some(&name_code) = config.parameters.encode(&parameter) {
-        let variant_encoding = config
-            .parameter_values
-            .entry(name_code)
-            .or_insert(LabelEncoding::new());
+    let Some(&name_code) = config.parameters.encode(&parameter) else {
+        return Err(UndefinedParameter(parameter).at(pos));
+    };
 
-        if let Some(&variant_code) = variant_encoding.encode(&variant) {
-            Ok(Attribute::Parameter(mark, name_code, variant_code))
-        } else {
-            Err(UndefinedParameterVariant(parameter, variant).at(pos))
-        }
-    } else {
-        Err(UndefinedParameter(parameter).at(pos))
-    }
+    let &variant_code = config
+        .parameter_values
+        .entry(name_code)
+        .or_insert(LabelEncoding::new())
+        .encode(&variant)
+        .ok_or_else(|| UndefinedParameterVariant(parameter, variant).at(pos))?;
+
+    Ok(Attribute::Parameter(mark, name_code, variant_code))
 }
 
 fn parse_character(config: &mut Config, character: String, pos: Position) -> PResult<Attribute> {
@@ -333,37 +302,42 @@ fn parse_character(config: &mut Config, character: String, pos: Position) -> PRe
 // This function will consume the next token, regardless of what it is.
 // If FileLexer gives an IO error, this function will consume and return it
 fn confirm_token_type(
-    file: &mut FileLexer,
+    file: &mut impl Iterator<Item = Token>,
     desired: RawToken,
     error: super::ParseErrorType,
     pos: Position,
 ) -> PResult<()> {
-    if let Some(token) = file.next().transpose()? {
-        if token.token == desired {
-            Ok(())
-        } else {
-            Err(error.at(token.pos))
-        }
+    let Some(token) = file.next() else {
+        return Err(error.at(pos));
+    };
+
+    if token.token == desired {
+        Ok(())
     } else {
-        Err(error.at(pos))
+        Err(error.at(token.pos))
     }
 }
 
 // Used for ensuring that lines are finished when they are supposed to be.
 // Goes until it consumes an EOL, and then marks every found token an error.
-fn end_line(file: &mut FileLexer) -> PResultV<()> {
-    let mut errors = Vec::new();
+fn end_line(file: &mut impl Iterator<Item = Token>) -> PResultV<()> {
+    let errors: Vec<_> = file
+        .take_while(|token| token.token != RawToken::EOL)
+        .map(|token| ExpectedEOL.at(token.pos))
+        .collect();
 
-    while let Some(token) = file.next().transpose()? {
-        if token.token == RawToken::EOL {
-            break;
-        } else {
-            errors.push(ExpectedEOL.at(token.pos));
-        }
-    }
+    check_error_vec((), errors)
+}
 
+fn end_block(token: &Token) -> bool {
+    token.token != RawToken::BlockClose
+}
+
+// If the error vector contains errors, then return those errors. Otherwise,
+// return `ok`
+fn check_error_vec<T, E>(ok: T, errors: Vec<E>) -> Result<T, Vec<E>> {
     if errors.is_empty() {
-        Ok(())
+        Ok(ok)
     } else {
         Err(errors)
     }

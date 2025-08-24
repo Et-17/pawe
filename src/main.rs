@@ -10,7 +10,7 @@ fn main() -> parser::PResult<()> {
 
     // lexer.for_each(|t| println!("{:?}", t.unwrap()));
 
-    let config_attempt = parser::parser::parse_config(&mut lexer);
+    let config_attempt = parser::parser::parse_config_file(&mut lexer);
 
     match config_attempt {
         Ok(config) => println!("{:#?}", config),

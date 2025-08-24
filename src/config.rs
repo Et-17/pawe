@@ -17,6 +17,14 @@ impl LabelEncoding {
         }
     }
 
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            encode: HashMap::with_capacity(capacity),
+            decode: HashMap::with_capacity(capacity),
+            next_code: 0,
+        }
+    }
+
     pub fn add(&mut self, label: String) -> u32 {
         if let Some(preëxisting_code) = self.encode.get(&label) {
             // This label already exists
@@ -36,6 +44,24 @@ impl LabelEncoding {
 
     pub fn decode(&self, code: &u32) -> Option<&String> {
         self.decode.get(code)
+    }
+}
+
+impl From<Vec<String>> for LabelEncoding {
+    fn from(value: Vec<String>) -> Self {
+        let mut encoding = Self::with_capacity(value.len());
+
+        encoding.extend(value);
+
+        return encoding;
+    }
+}
+
+impl Extend<String> for LabelEncoding {
+    fn extend<T: IntoIterator<Item = String>>(&mut self, iter: T) {
+        for element in iter {
+            self.add(element);
+        }
     }
 }
 

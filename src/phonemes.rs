@@ -23,6 +23,16 @@ impl Phoneme {
         }
     }
 
+    pub fn from_attributes(attributes: Vec<Attribute>) -> Self {
+        let mut phoneme = Self::new();
+
+        for attribute in attributes {
+            phoneme.add_attribute(attribute);
+        }
+
+        return phoneme;
+    }
+
     // Adds all the attributes from the given phoneme to this phoneme, so that
     // you can write defined characters in phoneme blocks to modify them
     pub fn add_phoneme(&mut self, phoneme: Phoneme) -> () {
@@ -84,6 +94,16 @@ impl Filter {
             features: HashMap::new(),
             parameters: HashMap::new(),
         }
+    }
+
+    pub fn from_attributes(attributes: Vec<Attribute>) -> Self {
+        let mut filter = Self::new();
+
+        for attribute in attributes {
+            filter.add_attribute(attribute);
+        }
+
+        return filter;
     }
 
     // This function will discard selector refernces and characters

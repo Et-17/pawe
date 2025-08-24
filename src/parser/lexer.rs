@@ -88,21 +88,7 @@ impl Iterator for FileLexer {
             }
         }
 
-        let next_token = self.current_line_tokens.pop_front()?;
-
-        if next_token.token == RawToken::BlockClose && self.insert_eol {
-            self.insert_eol = false;
-            let fake_eol = Token {
-                token: RawToken::EOL,
-                pos: next_token.pos,
-            };
-            self.current_line_tokens.push_front(next_token);
-            return Some(Ok(fake_eol));
-        }
-
-        self.insert_eol = next_token.token != RawToken::EOL;
-
-        Some(Ok(next_token))
+        Some(Ok(self.current_line_tokens.pop_front()?))
     }
 }
 
