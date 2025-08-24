@@ -1,10 +1,12 @@
 use std::iter::Peekable;
 
+use itertools::Itertools;
+
 use crate::config::{Config, LabelEncoding};
 use crate::error_handling::{Error, Position};
-use crate::phonemes::Phoneme;
+use crate::phonemes::{Attribute, Filter, Phoneme, Selector, SelectorCode, UnboundPhoneme};
 
-use super::lexer::{FileLexer, RawToken};
+use super::lexer::{FileLexer, RawToken, Token};
 use super::{PResult, PResultV, ParseErrorType::*};
 
 pub fn parse_config(file: &mut Peekable<FileLexer>) -> PResultV<Config> {
@@ -252,71 +254,92 @@ pub fn parse_identifier_block(
     }
 }
 
-// This function assumes that the opening [ has already been consumed
 pub fn parse_phoneme(file: &mut Peekable<FileLexer>, config: &mut Config) -> PResultV<Phoneme> {
-    let mut phoneme = Phoneme::new();
-    let mut errors: Vec<Error<super::ParseErrorType>> = Vec::new();
+    let attributes = parse_attribute_list(file, config, true)?;
 
-    // There is no way this is optimized, but I'll deal with that later
-    while let Some(token) = file.next().transpose()? {
-        match token.token {
-            RawToken::PhonemeClose => break,
-            RawToken::MarkedFeature(mark, feat) => {
-                if let Some(code) = config.features.encode(&feat) {
-                    phoneme.features.insert(*code, mark);
-                } else {
-                    errors.push(UndefinedFeature(feat).at(token.pos));
-                }
-            }
-            RawToken::MarkedParameter(true, param, variant) => {
-                match encode_parameter(config, &param, &variant, token.pos) {
-                    Ok((p_code, v_code)) => {
-                        phoneme.parameters.insert(p_code, v_code);
-                    }
-                    Err(e) => errors.push(e),
-                }
-            }
-            RawToken::UnmarkedIdentifier(ident) => {
-                if let Some(char_phoneme) = config.characters.get(&ident) {
-                    phoneme.add_phoneme(char_phoneme);
-                } else {
-                    errors.push(UndefinedCharacter(ident).at(token.pos));
-                }
-            }
-            RawToken::MarkedParameter(false, _, _) => {
-                errors.push(NegativeParameterInPhoneme.at(token.pos))
-            }
-            unknown => {
-                errors.push(UnexpectedToken(unknown).at(token.pos));
-            }
-        };
-    }
+    let mut phoneme = Phoneme::new();
+    attributes.into_iter().for_each(|attribute| phoneme.add_attribute(attribute));
+
+    Ok(phoneme)
+}
+
+pub fn parse_selector(file: &mut Peekable<FileLexer>, config: &mut Config, code: SelectorCode) -> PResultV<Selector> {
+    Ok(Selector {
+        code,
+        filter: parse_filter(file, config)?,
+    })
+}
+
+pub fn parse_filter(file: &mut Peekable<FileLexer>, config: &mut Config) -> PResultV<Filter> {
+    let attributes = parse_attribute_list(file, config, false)?;
+
+    let mut filter = Filter::new();
+    attributes.into_iter().for_each(|attribute| filter.add_attribute(attribute));
+
+    Ok(filter)
+}
+
+// This parses the internals of phonemes, selectors, and filters into a list of
+// attributes that other functions can process
+fn parse_attribute_list(file: &mut Peekable<FileLexer>, config: &mut Config, is_phoneme: bool) -> PResultV<Vec<Attribute>> {
+    let close_token = match is_phoneme {
+        true => RawToken::PhonemeClose,
+        false => RawToken::FilterSelectorClose,
+    };
+
+    let (attributes, errors): (Vec<_>, Vec<_>) = file.process_results(|block| {
+        block
+            .take_while(|token| token.token != close_token)
+            .map(|token| parse_attribute(config, token, !is_phoneme))
+            .partition_result()
+    })?;
 
     if errors.is_empty() {
-        Ok(phoneme)
+        Ok(attributes)
     } else {
         Err(errors)
     }
 }
 
-pub fn encode_parameter(
-    config: &mut Config,
-    parameter: &String,
-    variant: &String,
-    pos: Position,
-) -> PResult<(u32, u32)> {
-    if let Some(&name_code) = config.parameters.encode(parameter) {
-        let variant_encoding = config
-            .parameter_values
-            .entry(name_code)
-            .or_insert(LabelEncoding::new());
-        if let Some(&variant_code) = variant_encoding.encode(variant) {
-            Ok((name_code, variant_code))
+fn parse_attribute(config: &mut Config, token: Token, allow_neg_param: bool) -> PResult<Attribute> {
+    match token.token {
+        RawToken::MarkedFeature(mark, feat) => parse_feature(config, mark, feat, token.pos),
+        RawToken::MarkedParameter(mark, param, variant) => parse_parameter(config, mark, param, variant, token.pos, allow_neg_param),
+        RawToken::UnmarkedIdentifier(character) => parse_character(config, character, token.pos),
+        RawToken::SelectorCode(code) => Ok(Attribute::Selection(code)),
+        unexpected => Err(UnexpectedToken(unexpected).at(token.pos)),
+    }
+}
+
+fn parse_feature(config: &mut Config, mark: bool, feature: String, pos: Position) -> PResult<Attribute> {
+    match config.features.encode(&feature) {
+        Some(&code) => Ok(Attribute::Feature(mark, code)),
+        None => Err(UndefinedFeature(feature).at(pos)),
+    }
+}
+
+fn parse_parameter(config: &mut Config, mark: bool, parameter: String, variant: String, pos: Position, allow_neg_param: bool) -> PResult<Attribute> {
+    if !allow_neg_param && !mark {
+        return Err(NegativeParameterInPhoneme.at(pos));
+    }
+
+    if let Some(&name_code) = config.parameters.encode(&parameter) {
+        let variant_encoding = config.parameter_values.entry(name_code).or_insert(LabelEncoding::new());
+
+        if let Some(&variant_code) = variant_encoding.encode(&variant) {
+            Ok(Attribute::Parameter(mark, name_code, variant_code))
         } else {
-            Err(UndefinedParameterVariant(parameter.to_owned(), variant.to_owned()).at(pos))
+            Err(UndefinedParameterVariant(parameter, variant).at(pos))
         }
     } else {
-        Err(UndefinedParameter(parameter.to_owned()).at(pos))
+        Err(UndefinedParameter(parameter).at(pos))
+    }
+}
+
+fn parse_character(config: &mut Config, character: String, pos: Position) -> PResult<Attribute> {
+    match config.characters.get(&character) {
+        Some(phoneme) => Ok(Attribute::Character(phoneme.to_owned())),
+        None => Err(UndefinedCharacter(character).at(pos))
     }
 }
 

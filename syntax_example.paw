@@ -89,7 +89,7 @@ evolve ProtoIndoEuropean to PreProtoGermanic {
 	1(+type.vowel +length.long) > [1 +length.overlong] / _ #;
 
 	// Loss of laryngeals, phonemicising the allophones of /e/
-	(+place.laryngeal) > / // _ (+type.consonant);
+	(+place.laryngeal) > / # _ (+type.consonant);
 	1(+type.vowel) (+place.laryngeal) (+type.vowel) > [1 +length.overlong];
 	1(+type.vowel) (+place.laryngeal) > [1 +length.long];
 	(+place.laryngeal) > / _ (+type.vowel);

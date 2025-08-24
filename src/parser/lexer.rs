@@ -10,6 +10,7 @@ use std::{
 use itertools::{Itertools, PeekingNext};
 
 use crate::error_handling::{Error, Position};
+use crate::phonemes::SelectorCode;
 
 pub struct FileLexer {
     file: BufReader<File>,
@@ -127,7 +128,7 @@ pub enum RawToken {
     BlockOpen,            // {
     BlockClose,           // }
     FilterOpen,           // (
-    SelectorOpen(String), // █(
+    SelectorOpen(SelectorCode), // █(
     FilterSelectorClose,  // )
     PhonemeOpen,          // [
     PhonemeClose,         // ]
@@ -135,6 +136,7 @@ pub enum RawToken {
     // General tokens
     MarkedFeature(bool, String),           // ±███
     MarkedParameter(bool, String, String), // ±███.███
+    SelectorCode(SelectorCode),            //  N
     UnmarkedIdentifier(String),            //  ███
 
     UnknownCharacter(char),
@@ -183,13 +185,8 @@ fn read_raw_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -
         .collect()
 }
 
-fn lex_raw_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> RawToken {
+fn lex_unmarked_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> RawToken {
     let identifier = read_raw_identifier(line);
-
-    // Check if this is the opening of a selector
-    if line.peeking_next(|c| c.grapheme == '(').is_some() {
-        return RawToken::SelectorOpen(identifier);
-    }
 
     return match identifier.as_str() {
         "languages" => RawToken::Languages,
@@ -198,7 +195,20 @@ fn lex_raw_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) ->
         "characters" => RawToken::Characters,
         "evolve" => RawToken::Evolve,
         "to" => RawToken::To,
-        _ => RawToken::UnmarkedIdentifier(identifier),
+        _ => {
+            if identifier.chars().all(char::is_numeric) {
+                if let Ok(code) = identifier.parse::<SelectorCode>() {
+                    if line.peeking_next(|c| c.grapheme == '(').is_some() {
+                        return RawToken::SelectorOpen(code)
+                    }
+
+                    return RawToken::SelectorCode(code);
+                }
+            }
+
+
+            RawToken::UnmarkedIdentifier(identifier)
+        },
     };
 }
 
@@ -224,7 +234,7 @@ fn lex_token<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> Option<T
             line.next();
             continue;
         } else if c.is_alphanumeric() {
-            return Some(mark_token(lex_raw_identifier(line), pos));
+            return Some(mark_token(lex_unmarked_identifier(line), pos));
         } else if c == '+' {
             line.next();
             return Some(mark_token(lex_marked_identifier(line, true), pos));
