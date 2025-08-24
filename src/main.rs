@@ -6,11 +6,11 @@ mod parser;
 mod phonemes;
 
 fn main() -> parser::PResult<()> {
-    let lexer = FileLexer::lex_file("syntax_example.paw".into())?;
+    let mut lexer = FileLexer::lex_file("syntax_example.paw".into())?;
 
     // lexer.for_each(|t| println!("{:?}", t.unwrap()));
 
-    let config_attempt = parser::parser::parse_config(&mut lexer.peekable());
+    let config_attempt = parser::parser::parse_config(&mut lexer);
 
     match config_attempt {
         Ok(config) => println!("{:#?}", config),

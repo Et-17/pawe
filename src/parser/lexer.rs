@@ -125,13 +125,13 @@ pub enum RawToken {
     Comment,       // //
 
     // Section markers
-    BlockOpen,            // {
-    BlockClose,           // }
-    FilterOpen,           // (
+    BlockOpen,                  // {
+    BlockClose,                 // }
+    FilterOpen,                 // (
     SelectorOpen(SelectorCode), // █(
-    FilterSelectorClose,  // )
-    PhonemeOpen,          // [
-    PhonemeClose,         // ]
+    FilterSelectorClose,        // )
+    PhonemeOpen,                // [
+    PhonemeClose,               // ]
 
     // General tokens
     MarkedFeature(bool, String),           // ±███
@@ -199,16 +199,15 @@ fn lex_unmarked_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T
             if identifier.chars().all(char::is_numeric) {
                 if let Ok(code) = identifier.parse::<SelectorCode>() {
                     if line.peeking_next(|c| c.grapheme == '(').is_some() {
-                        return RawToken::SelectorOpen(code)
+                        return RawToken::SelectorOpen(code);
                     }
 
                     return RawToken::SelectorCode(code);
                 }
             }
 
-
             RawToken::UnmarkedIdentifier(identifier)
-        },
+        }
     };
 }
 

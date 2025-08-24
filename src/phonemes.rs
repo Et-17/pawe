@@ -1,4 +1,4 @@
-use std::{collections::HashMap};
+use std::collections::HashMap;
 
 pub type SelectorCode = u8;
 
@@ -42,7 +42,7 @@ impl Phoneme {
             Attribute::Character(definition) => {
                 self.add_phoneme(definition);
             }
-            Attribute::Selection(_) => ()
+            Attribute::Selection(_) => (),
         }
     }
 }
@@ -95,7 +95,7 @@ impl Filter {
             Attribute::Parameter(mark, param, variant) => {
                 self.parameters.insert(param, (mark, variant));
             }
-            _ => ()
+            _ => (),
         }
     }
 }
