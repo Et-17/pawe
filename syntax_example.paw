@@ -73,7 +73,7 @@ evolve ProtoIndoEuropean to PreProtoGermanic {
 	e > o / _ h₃;
 
 	// Merging of PIE palatovelar and velar plosives
-	1(+place.palatovelar +manner.plosive) > [1 +manner.velar];
+	1(+place.palatovelar +manner.plosive) > [1 +place.velar];
 
 	// Epenthesis of /u/ before syllabic sonorants
 	1(+type.consonant +syllabic) > u [1 -syllabic];
@@ -101,7 +101,7 @@ evolve ProtoIndoEuropean to PreProtoGermanic {
 	1(+place.velar) w > [1 +labialized];
 
 	// Delabialization of labiovelars
-	1(+place.velar +labialized) > [1 -labialized] > _ u;
-	1(+place.velar +labialized) > [1 -labialized] > u _;
-	1(+place.velar +labialized) > [1 -labialized] > _ t;
+	1(+place.velar +labialized) > [1 -labialized] / _ u;
+	1(+place.velar +labialized) > [1 -labialized] / u _;
+	1(+place.velar +labialized) > [1 -labialized] / _ t;
 }

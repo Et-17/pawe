@@ -16,9 +16,6 @@ pub struct FileLexer {
     file: BufReader<File>,
     current_line_tokens: VecDeque<Token>,
     line_num: usize,
-    // Whether the current line is ended or not, so the lexer can insert an EOL
-    // before a block close if it's not
-    insert_eol: bool,
 }
 
 impl FileLexer {
@@ -73,7 +70,6 @@ impl FileLexer {
             file: BufReader::new(file),
             current_line_tokens: VecDeque::new(),
             line_num: 0,
-            insert_eol: false,
         })
     }
 }
@@ -103,12 +99,12 @@ pub enum RawToken {
     To,         // to
 
     // Special characters
-    Output,        // >
-    Environment,   // /
-    InputLocation, // _
-    WordBoundry,   // #
-    EOL,           // ;
-    Comment,       // //
+    Output,      // >
+    Environment, // /
+    Target,      // _
+    WordBoundry, // #
+    EOL,         // ;
+    Comment,     // //
 
     // Section markers
     BlockOpen,                  // {
@@ -231,7 +227,7 @@ fn lex_token<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> Option<T
         let to_return = match c {
             '>' => RawToken::Output,
             '/' => RawToken::Environment,
-            '_' => RawToken::InputLocation,
+            '_' => RawToken::Target,
             '#' => RawToken::WordBoundry,
             ';' => RawToken::EOL,
 

@@ -11,12 +11,12 @@ pub enum InputAtom {
 pub enum EnvironmentAtom {
     Filter(Filter),
     Phoneme(Phoneme),
+    WordBoundry,
 }
 
 #[derive(Debug)]
 pub struct Rule {
     pub input: Vec<InputAtom>,
     pub output: Vec<UnboundPhoneme>,
-    pub pre_environment: Vec<EnvironmentAtom>,
-    pub post_environment: Vec<EnvironmentAtom>,
+    pub environment: Option<(Vec<EnvironmentAtom>, Vec<EnvironmentAtom>)>,
 }

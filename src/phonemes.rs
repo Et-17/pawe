@@ -24,16 +24,6 @@ impl Phoneme {
         }
     }
 
-    pub fn from_attributes(attributes: Vec<Attribute>) -> Self {
-        let mut phoneme = Self::new();
-
-        for attribute in attributes {
-            phoneme.add_attribute(attribute);
-        }
-
-        return phoneme;
-    }
-
     // Adds all the attributes from the given phoneme to this phoneme, so that
     // you can write defined characters in phoneme blocks to modify them
     pub fn add_phoneme(&mut self, phoneme: Phoneme) -> () {
@@ -58,6 +48,18 @@ impl Phoneme {
     }
 }
 
+impl FromIterator<Attribute> for Phoneme {
+    fn from_iter<T: IntoIterator<Item = Attribute>>(iter: T) -> Self {
+        let mut phoneme = Self::new();
+
+        for attribute in iter {
+            phoneme.add_attribute(attribute);
+        }
+
+        phoneme
+    }
+}
+
 #[derive(Debug)]
 pub struct UnboundPhoneme {
     pub attributes: Vec<Attribute>,
@@ -68,6 +70,17 @@ impl UnboundPhoneme {
         Self {
             attributes: Vec::new(),
         }
+    }
+
+    pub fn from_attributes(attributes: Vec<Attribute>) -> Self {
+        Self { attributes }
+    }
+
+    pub fn from_attribute(attribute: Attribute) -> Self {
+        let mut attributes = Vec::with_capacity(1);
+        attributes.push(attribute);
+
+        Self { attributes }
     }
 }
 

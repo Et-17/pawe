@@ -28,6 +28,8 @@ pub enum ParseErrorType {
     UndefinedLanguage(String),
     ExpectedTo,
     AlreadyDefinedEvolution(String, String),
+    MultipleTargets,
+    MissingTarget,
     // In case we need to note that a token has not been explicitly handled yet
     // but it should be. This is an issue with PAWE, not the code
     UnhandledToken(Token),
@@ -67,6 +69,8 @@ impl Display for ParseErrorType {
                 "An evolution from `{}` to `{}` has already been defined",
                 input, output
             ),
+            Self::MultipleTargets => write!(f, "There are multiple targets in the environment"),
+            Self::MissingTarget => write!(f, "There is no target in the environment"),
             Self::UnexpectedToken(token) => write!(f, "Unexpected token {:?}", token),
             Self::UnhandledToken(token) => write!(f, "Unhandled token: {:?}", token),
             Self::ExpectedPhoneme => write!(f, "Expected a phoneme"),

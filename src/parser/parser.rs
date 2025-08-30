@@ -2,7 +2,7 @@ use itertools::Itertools;
 
 use crate::config::{Config, LabelEncoding};
 use crate::error_handling::{Error, Position};
-use crate::evolution::Rule;
+use crate::evolution::{EnvironmentAtom, InputAtom, Rule};
 use crate::phonemes::{Attribute, Filter, Phoneme, Selector, SelectorCode, UnboundPhoneme};
 
 use super::lexer::{FileLexer, RawToken, Token};
@@ -226,13 +226,152 @@ fn parse_evolution_rule(
     config: &mut Config,
     pos: Position,
 ) -> PResultV<Rule> {
-    file.count();
-    Ok(Rule {
-        input: Vec::new(),
-        output: Vec::new(),
-        pre_environment: Vec::new(),
-        post_environment: Vec::new(),
-    })
+    let mut errors = Vec::new();
+
+    let mut input: Vec<InputAtom> = Vec::new();
+    let mut input_iter = file.take_while(|t| t.token != RawToken::Output);
+    while let Some(token) = input_iter.next() {
+        match token.token {
+            RawToken::SelectorOpen(code) => match parse_selector(&mut input_iter, config, code) {
+                Ok(selector) => input.push(InputAtom::Selector(selector)),
+                Err(mut errs) => errors.append(&mut errs),
+            },
+            RawToken::FilterOpen => match parse_filter(&mut input_iter, config) {
+                Ok(filter) => input.push(InputAtom::Filter(filter)),
+                Err(mut errs) => errors.append(&mut errs),
+            },
+            RawToken::PhonemeOpen => match parse_phoneme(&mut input_iter, config) {
+                Ok(phoneme) => input.push(InputAtom::Phoneme(phoneme)),
+                Err(mut errs) => errors.append(&mut errs),
+            },
+            RawToken::UnmarkedIdentifier(ident) => {
+                match parse_character(config, ident, token.pos) {
+                    Ok(Attribute::Character(character)) => {
+                        input.push(InputAtom::Phoneme(character))
+                    }
+                    Ok(_) => (), // won't reach here
+                    Err(err) => errors.push(err),
+                }
+            }
+            unexpected => errors.push(UnexpectedToken(unexpected).at(token.pos)),
+        }
+    }
+
+    let mut do_environment = false;
+    let mut output: Vec<UnboundPhoneme> = Vec::new();
+    let mut output_iter = file.take_while_inclusive(|t| t.token != RawToken::Environment);
+    while let Some(token) = output_iter.next() {
+        match token.token {
+            RawToken::UnmarkedIdentifier(ident) => {
+                match parse_character(config, ident, token.pos) {
+                    Ok(attr) => output.push(UnboundPhoneme::from_attribute(attr)),
+                    Err(err) => errors.push(err),
+                }
+            }
+            RawToken::PhonemeOpen => match parse_attribute_list(&mut output_iter, config, true) {
+                Ok(attrs) => output.push(UnboundPhoneme::from_attributes(attrs)),
+                Err(mut errs) => errors.append(&mut errs),
+            },
+            RawToken::Environment => {
+                do_environment = true;
+                break;
+            }
+            unexpected => errors.push(UnexpectedToken(unexpected).at(token.pos)),
+        }
+    }
+
+    let environment = if do_environment {
+        match parse_evolution_environment(file, config, pos) {
+            Ok(env) => Some(env),
+            Err(mut errs) => {
+                errors.append(&mut errs);
+                return Err(errors);
+            }
+        }
+    } else {
+        None
+    };
+
+    check_error_vec(
+        Rule {
+            input,
+            output,
+            environment,
+        },
+        errors,
+    )
+}
+
+// This function will consume all of file. Only use on a take_while that will
+// restrict it.
+fn parse_evolution_environment(
+    file: &mut impl Iterator<Item = Token>,
+    config: &mut Config,
+    pos: Position,
+) -> PResultV<(Vec<EnvironmentAtom>, Vec<EnvironmentAtom>)> {
+    let mut errors = Vec::new();
+    let mut last_pos = pos;
+
+    let mut pre_environment = Vec::new();
+    loop {
+        // This loop will break if it sees a target token. If it reaches the end
+        // of the input before finding a target token, we know that there isn't
+        // one in the environment
+        let Some(token) = file.next() else {
+            errors.push(MissingTarget.at(last_pos));
+            return Err(errors);
+        };
+        last_pos = token.pos;
+
+        match token.token {
+            RawToken::PhonemeOpen => match parse_phoneme(file, config) {
+                Ok(phoneme) => pre_environment.push(EnvironmentAtom::Phoneme(phoneme)),
+                Err(mut errs) => errors.append(&mut errs),
+            },
+            RawToken::FilterOpen => match parse_filter(file, config) {
+                Ok(filter) => pre_environment.push(EnvironmentAtom::Filter(filter)),
+                Err(mut errs) => errors.append(&mut errs),
+            },
+            RawToken::UnmarkedIdentifier(ident) => {
+                match parse_character(config, ident, token.pos) {
+                    Ok(character) => pre_environment.push(EnvironmentAtom::Phoneme(
+                        std::iter::once(character).collect(),
+                    )),
+                    Err(err) => errors.push(err),
+                }
+            }
+            RawToken::WordBoundry => pre_environment.push(EnvironmentAtom::WordBoundry),
+            RawToken::Target => break,
+            unexpected => errors.push(UnexpectedToken(unexpected).at(token.pos)),
+        }
+    }
+
+    let mut post_environment = Vec::new();
+    while let Some(token) = file.next() {
+        match token.token {
+            RawToken::PhonemeOpen => match parse_phoneme(file, config) {
+                Ok(phoneme) => post_environment.push(EnvironmentAtom::Phoneme(phoneme)),
+                Err(mut errs) => errors.append(&mut errs),
+            },
+            RawToken::FilterOpen => match parse_filter(file, config) {
+                Ok(filter) => pre_environment.push(EnvironmentAtom::Filter(filter)),
+                Err(mut errs) => errors.append(&mut errs),
+            },
+            RawToken::UnmarkedIdentifier(ident) => {
+                match parse_character(config, ident, token.pos) {
+                    Ok(character) => pre_environment.push(EnvironmentAtom::Phoneme(
+                        std::iter::once(character).collect(),
+                    )),
+                    Err(err) => errors.push(err),
+                }
+            }
+            RawToken::WordBoundry => post_environment.push(EnvironmentAtom::WordBoundry),
+            RawToken::Target => errors.push(MultipleTargets.at(token.pos)),
+            unexpected => errors.push(UnexpectedToken(unexpected).at(token.pos)),
+        }
+    }
+
+    check_error_vec((pre_environment, post_environment), errors)
 }
 
 // Several syntax elements are composed of a block of lines containing a single
@@ -269,7 +408,7 @@ fn parse_identifier_block(file: &mut impl Iterator<Item = Token>) -> PResultV<Ve
 fn parse_phoneme(file: &mut impl Iterator<Item = Token>, config: &mut Config) -> PResultV<Phoneme> {
     let attributes = parse_attribute_list(file, config, true)?;
 
-    Ok(Phoneme::from_attributes(attributes))
+    Ok(Phoneme::from_iter(attributes))
 }
 
 fn parse_selector(
