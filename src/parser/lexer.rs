@@ -9,6 +9,9 @@ use std::{
 
 use itertools::{Itertools, PeekingNext};
 
+use crate::error_handling::{Error, Position};
+use crate::phonemes::SelectorCode;
+
 pub struct FileLexer {
     file: BufReader<File>,
     current_line_tokens: VecDeque<Token>,
@@ -16,14 +19,20 @@ pub struct FileLexer {
 }
 
 impl FileLexer {
-    fn lex_line(&mut self) -> Option<std::io::Result<()>> {
+    fn lex_line(&mut self) -> Option<super::PResult<()>> {
         let mut next_line = String::new();
         let read_amount = self.file.read_line(&mut next_line);
 
         if let Ok(0) = read_amount {
             return None;
         } else if let Err(e) = read_amount {
-            return Some(Err(e));
+            return Some(Err(Error {
+                pos: Position {
+                    line: self.line_num + 1,
+                    char: 0,
+                },
+                error: super::ParseErrorType::FileError(e),
+            }));
         }
 
         self.line_num += 1;
@@ -51,8 +60,11 @@ impl FileLexer {
         return Some(Ok(()));
     }
 
-    pub fn lex_file(path: PathBuf) -> std::io::Result<FileLexer> {
-        let file = File::open(path)?;
+    pub fn lex_file(path: PathBuf) -> super::PResult<FileLexer> {
+        let file = File::open(path).map_err(|e| Error {
+            pos: Position { line: 0, char: 0 },
+            error: super::ParseErrorType::FileError(e),
+        })?;
 
         Ok(FileLexer {
             file: BufReader::new(file),
@@ -63,20 +75,16 @@ impl FileLexer {
 }
 
 impl Iterator for FileLexer {
-    type Item = std::io::Result<Token>;
+    type Item = super::PResult<Token>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current_line_tokens.len() > 0 {
-            let next_token = self.current_line_tokens.pop_front()?;
-            return Some(Ok(next_token));
-        } else {
-            let line_lexing_res = self.lex_line()?;
-
-            return match line_lexing_res {
-                Err(e) => Some(Err(e)),
-                Ok(()) => self.next(),
-            };
+        while self.current_line_tokens.is_empty() {
+            if let Err(e) = self.lex_line()? {
+                return Some(Err(e));
+            }
         }
+
+        Some(Ok(self.current_line_tokens.pop_front()?))
     }
 }
 
@@ -91,40 +99,29 @@ pub enum RawToken {
     To,         // to
 
     // Special characters
-    Output,        // >
-    Environment,   // /
-    InputLocation, // _
-    WordBoundry,   // #
-    EOL,           // ;
-    Comment,       // //
+    Output,      // >
+    Environment, // /
+    Target,      // _
+    WordBoundry, // #
+    EOL,         // ;
+    Comment,     // //
 
     // Section markers
-    BlockOpen,                         // {
-    BlockClose,                        // }
-    MatchingPhonemeOpen,               // (
-    TaggedMatchingPhonemeOpen(String), // █(
-    MatchingPhonemeClose,              // )
-    ConcretePhonemeOpen,               // [
-    ConcretePhonemeClose,              // ]
+    BlockOpen,                  // {
+    BlockClose,                 // }
+    FilterOpen,                 // (
+    SelectorOpen(SelectorCode), // █(
+    FilterSelectorClose,        // )
+    PhonemeOpen,                // [
+    PhonemeClose,               // ]
 
     // General tokens
-    PositiveIdentifier(String), // +███
-    NegativeIdentifier(String), // -███
-    UnmarkedIdentifier(String), //  ███
+    MarkedFeature(bool, String),           // ±███
+    MarkedParameter(bool, String, String), // ±███.███
+    SelectorCode(SelectorCode),            //  N
+    UnmarkedIdentifier(String),            //  ███
 
     UnknownCharacter(char),
-}
-
-#[derive(Clone)]
-pub struct Position {
-    pub line: usize,
-    pub char: usize,
-}
-
-impl Debug for Position {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}:{}", self.line, self.char)
-    }
 }
 
 fn mark_token(token: RawToken, pos: Position) -> Token {
@@ -138,7 +135,7 @@ pub struct Token {
 
 impl Debug for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}::{:?}", self.pos, self.token)
+        write!(f, "{:}::{:?}", self.pos, self.token)
     }
 }
 
@@ -161,20 +158,17 @@ impl MarkedChar {
 }
 
 fn intra_identifier_character(c: char) -> bool {
-    c.is_alphanumeric() || c == '.'
+    c.is_alphanumeric() || c == '.' || c == '_'
 }
 
-fn lex_raw_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> RawToken {
-    // let identifier = line.peeking_take_while(|c| c.grapheme.is_alphanumeric()).map(|c| c.grapheme).collect();
-    let identifier = line
-        .peeking_take_while(|c| intra_identifier_character(c.grapheme))
+fn read_raw_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> String {
+    line.peeking_take_while(|c| intra_identifier_character(c.grapheme))
         .map(|c| c.grapheme)
-        .collect();
+        .collect()
+}
 
-    // Check if this is the opening of a tagged matching phoneme
-    if line.peeking_next(|c| c.grapheme == '(').is_some() {
-        return RawToken::TaggedMatchingPhonemeOpen(identifier);
-    }
+fn lex_unmarked_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> RawToken {
+    let identifier = read_raw_identifier(line);
 
     return match identifier.as_str() {
         "languages" => RawToken::Languages,
@@ -183,24 +177,33 @@ fn lex_raw_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) ->
         "characters" => RawToken::Characters,
         "evolve" => RawToken::Evolve,
         "to" => RawToken::To,
-        _ => RawToken::UnmarkedIdentifier(identifier),
+        _ => {
+            if identifier.chars().all(char::is_numeric) {
+                if let Ok(code) = identifier.parse::<SelectorCode>() {
+                    if line.peeking_next(|c| c.grapheme == '(').is_some() {
+                        return RawToken::SelectorOpen(code);
+                    }
+
+                    return RawToken::SelectorCode(code);
+                }
+            }
+
+            RawToken::UnmarkedIdentifier(identifier)
+        }
     };
 }
 
-fn lex_pos_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> RawToken {
-    let identifier = line
-        .peeking_take_while(|c| intra_identifier_character(c.grapheme))
-        .map(|c| c.grapheme)
-        .collect();
-    return RawToken::PositiveIdentifier(identifier);
-}
+fn lex_marked_identifier<T: Iterator<Item = MarkedChar>>(
+    line: &mut Peekable<T>,
+    mark: bool,
+) -> RawToken {
+    let identifier = read_raw_identifier(line);
 
-fn lex_neg_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> RawToken {
-    let identifier = line
-        .peeking_take_while(|c| intra_identifier_character(c.grapheme))
-        .map(|c| c.grapheme)
-        .collect();
-    return RawToken::NegativeIdentifier(identifier);
+    if let Some((name, variant)) = identifier.split_once('.') {
+        RawToken::MarkedParameter(mark, name.to_string(), variant.to_string())
+    } else {
+        RawToken::MarkedFeature(mark, identifier)
+    }
 }
 
 fn lex_token<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> Option<Token> {
@@ -212,28 +215,28 @@ fn lex_token<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> Option<T
             line.next();
             continue;
         } else if c.is_alphanumeric() {
-            return Some(mark_token(lex_raw_identifier(line), pos));
+            return Some(mark_token(lex_unmarked_identifier(line), pos));
         } else if c == '+' {
             line.next();
-            return Some(mark_token(lex_pos_identifier(line), pos));
+            return Some(mark_token(lex_marked_identifier(line, true), pos));
         } else if c == '-' {
             line.next();
-            return Some(mark_token(lex_neg_identifier(line), pos));
+            return Some(mark_token(lex_marked_identifier(line, false), pos));
         }
 
         let to_return = match c {
             '>' => RawToken::Output,
             '/' => RawToken::Environment,
-            '_' => RawToken::InputLocation,
+            '_' => RawToken::Target,
             '#' => RawToken::WordBoundry,
             ';' => RawToken::EOL,
 
             '{' => RawToken::BlockOpen,
             '}' => RawToken::BlockClose,
-            '(' => RawToken::MatchingPhonemeOpen,
-            ')' => RawToken::MatchingPhonemeClose,
-            '[' => RawToken::ConcretePhonemeOpen,
-            ']' => RawToken::ConcretePhonemeClose,
+            '(' => RawToken::FilterOpen,
+            ')' => RawToken::FilterSelectorClose,
+            '[' => RawToken::PhonemeOpen,
+            ']' => RawToken::PhonemeClose,
 
             unknown => RawToken::UnknownCharacter(unknown),
         };
