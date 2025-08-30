@@ -1,3 +1,4 @@
+use crate::evolution::Rule;
 use crate::phonemes::Phoneme;
 use std::collections::HashMap;
 
@@ -59,7 +60,13 @@ impl From<Vec<String>> for LabelEncoding {
 
 impl Extend<String> for LabelEncoding {
     fn extend<T: IntoIterator<Item = String>>(&mut self, iter: T) {
-        for element in iter {
+        let into_iter = iter.into_iter();
+        let size = into_iter.size_hint().0;
+
+        self.encode.reserve(size);
+        self.decode.reserve(size);
+
+        for element in into_iter {
             self.add(element);
         }
     }
@@ -72,6 +79,7 @@ pub struct Config {
     pub parameters: LabelEncoding,
     pub parameter_values: HashMap<u32, LabelEncoding>,
     pub characters: HashMap<String, Phoneme>,
+    pub evolutions: HashMap<u32, HashMap<u32, Vec<Rule>>>,
 }
 
 impl Config {
@@ -82,6 +90,7 @@ impl Config {
             parameters: LabelEncoding::new(),
             parameter_values: HashMap::new(),
             characters: HashMap::new(),
+            evolutions: HashMap::new(),
         }
     }
 }

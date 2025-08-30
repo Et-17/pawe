@@ -24,6 +24,10 @@ pub enum ParseErrorType {
     UnexpectedToken(RawToken),
     ExpectedPhoneme,
     NegativeParameterInPhoneme,
+    ExpectedLanguage,
+    UndefinedLanguage(String),
+    ExpectedTo,
+    AlreadyDefinedEvolution(String, String),
     // In case we need to note that a token has not been explicitly handled yet
     // but it should be. This is an issue with PAWE, not the code
     UnhandledToken(Token),
@@ -54,6 +58,14 @@ impl Display for ParseErrorType {
             Self::NegativeParameterInPhoneme => write!(
                 f,
                 "Negative parameters are only allowed in filters and selectors, not phonemes"
+            ),
+            Self::ExpectedLanguage => write!(f, "Expected a language name"),
+            Self::UndefinedLanguage(lang) => write!(f, "Could not find language `{}`", lang),
+            Self::ExpectedTo => write!(f, "Expected `to`"),
+            Self::AlreadyDefinedEvolution(input, output) => write!(
+                f,
+                "An evolution from `{}` to `{}` has already been defined",
+                input, output
             ),
             Self::UnexpectedToken(token) => write!(f, "Unexpected token {:?}", token),
             Self::UnhandledToken(token) => write!(f, "Unhandled token: {:?}", token),

@@ -2,6 +2,7 @@ use crate::parser::lexer::FileLexer;
 
 mod config;
 mod error_handling;
+mod evolution;
 mod parser;
 mod phonemes;
 

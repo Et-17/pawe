@@ -2,6 +2,7 @@ use itertools::Itertools;
 
 use crate::config::{Config, LabelEncoding};
 use crate::error_handling::{Error, Position};
+use crate::evolution::Rule;
 use crate::phonemes::{Attribute, Filter, Phoneme, Selector, SelectorCode, UnboundPhoneme};
 
 use super::lexer::{FileLexer, RawToken, Token};
@@ -155,15 +156,83 @@ fn parse_character_def(
 
 fn parse_evolve(
     file: &mut impl Iterator<Item = Token>,
-    _: &mut Config,
-    _: Position,
+    config: &mut Config,
+    pos: Position,
 ) -> PResultV<()> {
-    // todo!("woopsy")
+    let (input_language_code, input_language) = read_language(file, config, pos)?;
 
-    file.take_while(|token| token.token != RawToken::BlockClose)
-        .count();
+    confirm_token_type(file, RawToken::To, ExpectedTo, pos)?;
+
+    let (output_language_code, output_language) = read_language(file, config, pos)?;
+
+    let mut errors = Vec::new();
+    let mut rules = Vec::new();
+    confirm_token_type(file, RawToken::BlockOpen, ExpectedBlock, pos)?;
+    let mut block_iter = file.take_while(end_block).peekable();
+    while let Some(_) = block_iter.peek() {
+        let mut line_iter = (&mut block_iter).take_while(|t| t.token != RawToken::EOL);
+
+        match parse_evolution_rule(&mut line_iter, config, pos) {
+            Ok(rule) => rules.push(rule),
+            Err(mut errs) => errors.append(&mut errs),
+        }
+    }
+
+    if !errors.is_empty() {
+        return Err(errors);
+    }
+
+    let already_defined = config
+        .evolutions
+        .get(&input_language_code)
+        .and_then(|ie| ie.get(&output_language_code))
+        .is_some();
+    if already_defined {
+        return Err(AlreadyDefinedEvolution(input_language, output_language)
+            .at(pos)
+            .into());
+    }
+
+    config
+        .evolutions
+        .entry(input_language_code)
+        .or_default()
+        .insert(output_language_code, rules);
 
     Ok(())
+}
+
+fn read_language(
+    file: &mut impl Iterator<Item = Token>,
+    config: &mut Config,
+    pos: Position,
+) -> PResult<(u32, String)> {
+    let Some(language_token) = file.next() else {
+        return Err(ExpectedLanguage.at(pos));
+    };
+
+    let RawToken::UnmarkedIdentifier(language_name) = language_token.token else {
+        return Err(ExpectedLanguage.at(language_token.pos));
+    };
+
+    match config.languages.encode(&language_name) {
+        Some(&x) => Ok((x, language_name)),
+        None => Err(UndefinedLanguage(language_name).at(language_token.pos)),
+    }
+}
+
+fn parse_evolution_rule(
+    file: &mut impl Iterator<Item = Token>,
+    config: &mut Config,
+    pos: Position,
+) -> PResultV<Rule> {
+    file.count();
+    Ok(Rule {
+        input: Vec::new(),
+        output: Vec::new(),
+        pre_environment: Vec::new(),
+        post_environment: Vec::new(),
+    })
 }
 
 // Several syntax elements are composed of a block of lines containing a single

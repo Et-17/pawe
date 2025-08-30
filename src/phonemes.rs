@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 pub type SelectorCode = u8;
 
+#[derive(Debug)]
 pub enum Attribute {
     Feature(bool, u32),
     Parameter(bool, u32, u32),
@@ -57,6 +58,7 @@ impl Phoneme {
     }
 }
 
+#[derive(Debug)]
 pub struct UnboundPhoneme {
     pub attributes: Vec<Attribute>,
 }
@@ -69,6 +71,7 @@ impl UnboundPhoneme {
     }
 }
 
+#[derive(Debug)]
 pub struct Selector {
     pub code: SelectorCode,
     pub filter: Filter,
@@ -83,6 +86,7 @@ impl Selector {
     }
 }
 
+#[derive(Debug)]
 pub struct Filter {
     pub features: HashMap<u32, bool>,
     pub parameters: HashMap<u32, (bool, u32)>,
