@@ -264,12 +264,12 @@ fn parse_evolution_rule(
         match token.token {
             RawToken::UnmarkedIdentifier(ident) => {
                 match parse_character(config, ident, token.pos) {
-                    Ok(attr) => output.push(UnboundPhoneme::from_attribute(attr)),
+                    Ok(attr) => output.push(std::iter::once(attr).collect()),
                     Err(err) => errors.push(err),
                 }
             }
             RawToken::PhonemeOpen => match parse_attribute_list(&mut output_iter, config, true) {
-                Ok(attrs) => output.push(UnboundPhoneme::from_attributes(attrs)),
+                Ok(attrs) => output.push(UnboundPhoneme::from_iter(attrs)),
                 Err(mut errs) => errors.append(&mut errs),
             },
             RawToken::Environment => {
@@ -425,7 +425,7 @@ fn parse_selector(
 fn parse_filter(file: &mut impl Iterator<Item = Token>, config: &mut Config) -> PResultV<Filter> {
     let attributes = parse_attribute_list(file, config, false)?;
 
-    Ok(Filter::from_attributes(attributes))
+    Ok(Filter::from_iter(attributes))
 }
 
 // This parses the internals of phonemes, selectors, and filters into a list of

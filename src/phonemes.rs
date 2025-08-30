@@ -71,16 +71,13 @@ impl UnboundPhoneme {
             attributes: Vec::new(),
         }
     }
+}
 
-    pub fn from_attributes(attributes: Vec<Attribute>) -> Self {
-        Self { attributes }
-    }
-
-    pub fn from_attribute(attribute: Attribute) -> Self {
-        let mut attributes = Vec::with_capacity(1);
-        attributes.push(attribute);
-
-        Self { attributes }
+impl FromIterator<Attribute> for UnboundPhoneme {
+    fn from_iter<T: IntoIterator<Item = Attribute>>(iter: T) -> Self {
+        Self {
+            attributes: iter.into_iter().collect(),
+        }
     }
 }
 
@@ -113,16 +110,6 @@ impl Filter {
         }
     }
 
-    pub fn from_attributes(attributes: Vec<Attribute>) -> Self {
-        let mut filter = Self::new();
-
-        for attribute in attributes {
-            filter.add_attribute(attribute);
-        }
-
-        return filter;
-    }
-
     // This function will discard selector refernces and characters
     pub fn add_attribute(&mut self, attribute: Attribute) -> () {
         match attribute {
@@ -134,5 +121,17 @@ impl Filter {
             }
             _ => (),
         }
+    }
+}
+
+impl FromIterator<Attribute> for Filter {
+    fn from_iter<T: IntoIterator<Item = Attribute>>(iter: T) -> Self {
+        let mut filter = Self::new();
+
+        for attribute in iter {
+            filter.add_attribute(attribute);
+        }
+
+        return filter;
     }
 }

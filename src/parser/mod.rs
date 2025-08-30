@@ -5,34 +5,31 @@ use std::fmt::Display;
 
 use crate::error_handling::{Error, ErrorType, Position};
 
-use lexer::{RawToken, Token};
+use lexer::RawToken;
 
 #[derive(Debug)]
 pub enum ParseErrorType {
     ExpectedBlockIdentifier,
     ExpectedBlock,
-    UnexpectedBlock,
     ExpectedIdentifier, // empty line in languages or features block
-    Redefinition,       // attempted to redefine something
     ExpectedEOL,
-    UnexpectedEOF,
+    ExpectedPhoneme,
+    ExpectedLanguage,
+    ExpectedTo,
+    MissingTarget,
+
     UndefinedFeature(String),
     UndefinedParameter(String),
     UndefinedParameterVariant(String, String),
     UndefinedCharacter(String),
-    MalformedParameter(String),
-    UnexpectedToken(RawToken),
-    ExpectedPhoneme,
-    NegativeParameterInPhoneme,
-    ExpectedLanguage,
     UndefinedLanguage(String),
-    ExpectedTo,
+
+    Redefinition, // attempted to redefine something
     AlreadyDefinedEvolution(String, String),
+    NegativeParameterInPhoneme,
     MultipleTargets,
-    MissingTarget,
-    // In case we need to note that a token has not been explicitly handled yet
-    // but it should be. This is an issue with PAWE, not the code
-    UnhandledToken(Token),
+    UnexpectedToken(RawToken),
+
     FileError(std::io::Error),
 }
 
@@ -43,11 +40,13 @@ impl Display for ParseErrorType {
         match self {
             Self::ExpectedBlockIdentifier => write!(f, "Expected a block identifier keyword"),
             Self::ExpectedBlock => write!(f, "Expected a block"),
-            Self::UnexpectedBlock => write!(f, "Unexpected block"),
             Self::ExpectedIdentifier => write!(f, "Expected identifier"),
-            Self::Redefinition => write!(f, "Attempted to redefine something"),
             Self::ExpectedEOL => write!(f, "Expected end-of-line"),
-            Self::UnexpectedEOF => write!(f, "File ended unexpectedly"),
+            Self::ExpectedPhoneme => write!(f, "Expected a phoneme"),
+            Self::ExpectedLanguage => write!(f, "Expected a language name"),
+            Self::ExpectedTo => write!(f, "Expected `to`"),
+            Self::MissingTarget => write!(f, "There is no target in the environment"),
+
             Self::UndefinedFeature(feat) => write!(f, "Could not find feature `{}`", feat),
             Self::UndefinedParameter(param) => write!(f, "Could not find parameter `{}`", param),
             Self::UndefinedParameterVariant(param, var) => write!(
@@ -56,24 +55,21 @@ impl Display for ParseErrorType {
                 var, param
             ),
             Self::UndefinedCharacter(c) => write!(f, "Could not find character `{}`", c),
-            Self::MalformedParameter(param) => write!(f, "`{}` is not a valid parameter", param),
-            Self::NegativeParameterInPhoneme => write!(
-                f,
-                "Negative parameters are only allowed in filters and selectors, not phonemes"
-            ),
-            Self::ExpectedLanguage => write!(f, "Expected a language name"),
             Self::UndefinedLanguage(lang) => write!(f, "Could not find language `{}`", lang),
-            Self::ExpectedTo => write!(f, "Expected `to`"),
+
+            Self::Redefinition => write!(f, "Attempted to redefine something"),
             Self::AlreadyDefinedEvolution(input, output) => write!(
                 f,
                 "An evolution from `{}` to `{}` has already been defined",
                 input, output
             ),
+            Self::NegativeParameterInPhoneme => write!(
+                f,
+                "Negative parameters are only allowed in filters and selectors, not phonemes"
+            ),
             Self::MultipleTargets => write!(f, "There are multiple targets in the environment"),
-            Self::MissingTarget => write!(f, "There is no target in the environment"),
             Self::UnexpectedToken(token) => write!(f, "Unexpected token {:?}", token),
-            Self::UnhandledToken(token) => write!(f, "Unhandled token: {:?}", token),
-            Self::ExpectedPhoneme => write!(f, "Expected a phoneme"),
+
             Self::FileError(e) => write!(f, "File error: {}", e),
         }
     }
