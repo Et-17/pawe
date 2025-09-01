@@ -19,7 +19,6 @@ impl std::fmt::Debug for InputAtom {
 pub enum EnvironmentAtom {
     Filter(Filter),
     Phoneme(Phoneme),
-    WordBoundry,
 }
 
 impl std::fmt::Debug for EnvironmentAtom {
@@ -27,14 +26,21 @@ impl std::fmt::Debug for EnvironmentAtom {
         match self {
             EnvironmentAtom::Filter(filter) => filter.fmt(f),
             EnvironmentAtom::Phoneme(phoneme) => phoneme.fmt(f),
-            EnvironmentAtom::WordBoundry => write!(f, "#WordBoundary#"),
         }
     }
+}
+
+#[derive(Debug)]
+pub struct Environment {
+    pub match_word_start: bool,
+    pub match_word_end: bool,
+    pub pre_environment: Vec<EnvironmentAtom>,
+    pub post_environment: Vec<EnvironmentAtom>,
 }
 
 #[derive(Debug)]
 pub struct Rule {
     pub input: Vec<InputAtom>,
     pub output: Vec<UnboundPhoneme>,
-    pub environment: Option<(Vec<EnvironmentAtom>, Vec<EnvironmentAtom>)>,
+    pub environment: Option<Environment>,
 }

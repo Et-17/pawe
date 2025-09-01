@@ -2,7 +2,7 @@ use itertools::Itertools;
 
 use crate::config::{Config, Label};
 use crate::error_handling::{Error, Position};
-use crate::evolution::{EnvironmentAtom, InputAtom, Rule};
+use crate::evolution::{Environment, EnvironmentAtom, InputAtom, Rule};
 use crate::phonemes::{Attribute, Filter, Phoneme, Selector, SelectorCode, UnboundPhoneme};
 
 use super::lexer::{FileLexer, RawToken, Token};
@@ -312,11 +312,13 @@ fn parse_evolution_environment(
     file: &mut impl Iterator<Item = Token>,
     config: &mut Config,
     pos: Position,
-) -> PResultV<(Vec<EnvironmentAtom>, Vec<EnvironmentAtom>)> {
+) -> PResultV<Environment> {
     let mut errors = Vec::new();
     let mut last_pos = pos;
 
     let mut pre_environment = Vec::new();
+    let mut first = true;
+    let mut match_word_start = false;
     loop {
         // This loop will break if it sees a target token. If it reaches the end
         // of the input before finding a target token, we know that there isn't
@@ -344,14 +346,29 @@ fn parse_evolution_environment(
                     Err(err) => errors.push(err),
                 }
             }
-            RawToken::WordBoundry => pre_environment.push(EnvironmentAtom::WordBoundry),
+            RawToken::WordBoundry => {
+                if first {
+                    match_word_start = true;
+                } else {
+                    errors.push(MisplacedWordBoundary.at(token.pos));
+                }
+            }
             RawToken::Target => break,
             unexpected => errors.push(UnexpectedToken(unexpected).at(token.pos)),
         }
+
+        first = false;
     }
 
     let mut post_environment = Vec::new();
+    let mut match_word_end_pos: Option<Position> = None;
     while let Some(token) = file.next() {
+        // Check if this is extra environment after matching word end
+        if let Some(token_pos) = match_word_end_pos {
+            errors.push(MisplacedWordBoundary.at(token_pos));
+            continue;
+        }
+
         match token.token {
             RawToken::PhonemeOpen => match parse_phoneme(file, config) {
                 Ok(phoneme) => post_environment.push(EnvironmentAtom::Phoneme(phoneme)),
@@ -369,13 +386,20 @@ fn parse_evolution_environment(
                     Err(err) => errors.push(err),
                 }
             }
-            RawToken::WordBoundry => post_environment.push(EnvironmentAtom::WordBoundry),
+            RawToken::WordBoundry => match_word_end_pos = Some(token.pos),
             RawToken::Target => errors.push(MultipleTargets.at(token.pos)),
             unexpected => errors.push(UnexpectedToken(unexpected).at(token.pos)),
         }
     }
 
-    check_error_vec((pre_environment, post_environment), errors)
+    let environment = Environment {
+        match_word_start,
+        match_word_end: match_word_end_pos.is_some(),
+        pre_environment,
+        post_environment,
+    };
+
+    check_error_vec(environment, errors)
 }
 
 // Several syntax elements are composed of a block of lines containing a single

@@ -27,6 +27,7 @@ pub enum ParseErrorType {
     Redefinition, // attempted to redefine something
     AlreadyDefinedEvolution(String, String),
     NegativeParameterInPhoneme,
+    MisplacedWordBoundary,
     MultipleTargets,
     UnexpectedToken(RawToken),
 
@@ -66,6 +67,10 @@ impl Display for ParseErrorType {
             Self::NegativeParameterInPhoneme => write!(
                 f,
                 "Negative parameters are only allowed in filters and selectors, not phonemes"
+            ),
+            Self::MisplacedWordBoundary => write!(
+                f,
+                "You can only match word boundaries at the start or end of environments"
             ),
             Self::MultipleTargets => write!(f, "There are multiple targets in the environment"),
             Self::UnexpectedToken(token) => write!(f, "Unexpected token {:?}", token),
