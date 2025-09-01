@@ -1,19 +1,21 @@
 use std::collections::HashMap;
 
+use crate::config::Label;
+
 pub type SelectorCode = u8;
 
 #[derive(Debug)]
 pub enum Attribute {
-    Feature(bool, u32),
-    Parameter(bool, u32, u32),
+    Feature(bool, Label),
+    Parameter(bool, Label, Label),
     Character(Phoneme),
     Selection(SelectorCode),
 }
 
 #[derive(Debug, Clone)]
 pub struct Phoneme {
-    pub features: HashMap<u32, bool>,
-    pub parameters: HashMap<u32, u32>,
+    pub features: HashMap<Label, bool>,
+    pub parameters: HashMap<Label, Label>,
 }
 
 impl Phoneme {
@@ -27,8 +29,8 @@ impl Phoneme {
     // Adds all the attributes from the given phoneme to this phoneme, so that
     // you can write defined characters in phoneme blocks to modify them
     pub fn add_phoneme(&mut self, phoneme: Phoneme) -> () {
-        self.features.extend(phoneme.features.iter());
-        self.parameters.extend(phoneme.parameters.iter());
+        self.features.extend(phoneme.features);
+        self.parameters.extend(phoneme.parameters);
     }
 
     // This function will discard selector references and negative parameters
@@ -65,14 +67,6 @@ pub struct UnboundPhoneme {
     pub attributes: Vec<Attribute>,
 }
 
-impl UnboundPhoneme {
-    pub fn new() -> Self {
-        Self {
-            attributes: Vec::new(),
-        }
-    }
-}
-
 impl FromIterator<Attribute> for UnboundPhoneme {
     fn from_iter<T: IntoIterator<Item = Attribute>>(iter: T) -> Self {
         Self {
@@ -87,19 +81,10 @@ pub struct Selector {
     pub filter: Filter,
 }
 
-impl Selector {
-    pub fn new(code: SelectorCode) -> Self {
-        Self {
-            code,
-            filter: Filter::new(),
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct Filter {
-    pub features: HashMap<u32, bool>,
-    pub parameters: HashMap<u32, (bool, u32)>,
+    pub features: HashMap<Label, bool>,
+    pub parameters: HashMap<Label, (bool, Label)>,
 }
 
 impl Filter {

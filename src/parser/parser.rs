@@ -1,6 +1,6 @@
 use itertools::Itertools;
 
-use crate::config::{Config, LabelEncoding};
+use crate::config::{Config, Label};
 use crate::error_handling::{Error, Position};
 use crate::evolution::{EnvironmentAtom, InputAtom, Rule};
 use crate::phonemes::{Attribute, Filter, Phoneme, Selector, SelectorCode, UnboundPhoneme};
@@ -96,10 +96,11 @@ fn parse_parameter_def(
     };
 
     confirm_token_type(file, RawToken::BlockOpen, ExpectedBlock, name_token.pos)?;
-    let value_labels = parse_identifier_block(file)?.into();
+    let variant_labels = parse_identifier_block(file)?;
 
-    let new_code = config.parameters.add(name);
-    config.parameter_values.insert(new_code, value_labels);
+    if config.parameters.add(name, variant_labels).is_err() {
+        return Err(Redefinition.at(name_token.pos).into());
+    }
 
     Ok(())
 }
@@ -159,11 +160,11 @@ fn parse_evolve(
     config: &mut Config,
     pos: Position,
 ) -> PResultV<()> {
-    let (input_language_code, input_language) = read_language(file, config, pos)?;
+    let input_language = read_language(file, config, pos)?;
 
     confirm_token_type(file, RawToken::To, ExpectedTo, pos)?;
 
-    let (output_language_code, output_language) = read_language(file, config, pos)?;
+    let output_language = read_language(file, config, pos)?;
 
     let mut errors = Vec::new();
     let mut rules = Vec::new();
@@ -184,20 +185,23 @@ fn parse_evolve(
 
     let already_defined = config
         .evolutions
-        .get(&input_language_code)
-        .and_then(|ie| ie.get(&output_language_code))
+        .get(&input_language)
+        .and_then(|le| le.get(&output_language))
         .is_some();
     if already_defined {
-        return Err(AlreadyDefinedEvolution(input_language, output_language)
-            .at(pos)
-            .into());
+        return Err(AlreadyDefinedEvolution(
+            input_language.to_string(),
+            output_language.to_string(),
+        )
+        .at(pos)
+        .into());
     }
 
     config
         .evolutions
-        .entry(input_language_code)
+        .entry(input_language)
         .or_default()
-        .insert(output_language_code, rules);
+        .insert(output_language, rules);
 
     Ok(())
 }
@@ -206,7 +210,7 @@ fn read_language(
     file: &mut impl Iterator<Item = Token>,
     config: &mut Config,
     pos: Position,
-) -> PResult<(u32, String)> {
+) -> PResult<Label> {
     let Some(language_token) = file.next() else {
         return Err(ExpectedLanguage.at(pos));
     };
@@ -216,7 +220,7 @@ fn read_language(
     };
 
     match config.languages.encode(&language_name) {
-        Some(&x) => Ok((x, language_name)),
+        Some(label) => Ok(label),
         None => Err(UndefinedLanguage(language_name).at(language_token.pos)),
     }
 }
@@ -467,7 +471,7 @@ fn parse_feature(
     pos: Position,
 ) -> PResult<Attribute> {
     match config.features.encode(&feature) {
-        Some(&code) => Ok(Attribute::Feature(mark, code)),
+        Some(label) => Ok(Attribute::Feature(mark, label)),
         None => Err(UndefinedFeature(feature).at(pos)),
     }
 }
@@ -484,18 +488,11 @@ fn parse_parameter(
         return Err(NegativeParameterInPhoneme.at(pos));
     }
 
-    let Some(&name_code) = config.parameters.encode(&parameter) else {
-        return Err(UndefinedParameter(parameter).at(pos));
-    };
-
-    let &variant_code = config
-        .parameter_values
-        .entry(name_code)
-        .or_insert(LabelEncoding::new())
-        .encode(&variant)
-        .ok_or_else(|| UndefinedParameterVariant(parameter, variant).at(pos))?;
-
-    Ok(Attribute::Parameter(mark, name_code, variant_code))
+    match config.parameters.encode(&parameter, &variant) {
+        Some((p_label, Some(v_label))) => Ok(Attribute::Parameter(mark, p_label, v_label)),
+        Some((_, None)) => Err(UndefinedParameterVariant(parameter, variant).at(pos)),
+        None => Err(UndefinedParameter(parameter).at(pos)),
+    }
 }
 
 fn parse_character(config: &mut Config, character: String, pos: Position) -> PResult<Attribute> {
