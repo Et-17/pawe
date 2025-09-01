@@ -1,10 +1,12 @@
 use std::collections::HashMap;
+use std::fmt::Debug;
+
+use itertools::Itertools;
 
 use crate::config::Label;
 
 pub type SelectorCode = u8;
 
-#[derive(Debug)]
 pub enum Attribute {
     Feature(bool, Label),
     Parameter(bool, Label, Label),
@@ -12,7 +14,20 @@ pub enum Attribute {
     Selection(SelectorCode),
 }
 
-#[derive(Debug, Clone)]
+impl Debug for Attribute {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Attribute::Feature(mark, label) => write!(f, "{}{}", mark_char(*mark), label),
+            Attribute::Parameter(mark, param, var) => {
+                write!(f, "{}{}.{}", mark_char(*mark), param, var)
+            }
+            Attribute::Character(phoneme) => write!(f, "{:?}", phoneme),
+            Attribute::Selection(code) => write!(f, "{}", code),
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct Phoneme {
     pub features: HashMap<Label, bool>,
     pub parameters: HashMap<Label, Label>,
@@ -62,7 +77,23 @@ impl FromIterator<Attribute> for Phoneme {
     }
 }
 
-#[derive(Debug)]
+impl Debug for Phoneme {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let features_strs = self
+            .features
+            .iter()
+            .sorted_by_key(|x| x.0.code)
+            .map(|(label, &mark)| format!("{}{}", mark_char(mark), label));
+        let parameter_strs = self
+            .parameters
+            .iter()
+            .sorted_by_key(|x| x.0.code)
+            .map(|(param, var)| format!("+{}.{}", param, var));
+
+        write!(f, "[{}]", features_strs.chain(parameter_strs).join(" "))
+    }
+}
+
 pub struct UnboundPhoneme {
     pub attributes: Vec<Attribute>,
 }
@@ -75,13 +106,29 @@ impl FromIterator<Attribute> for UnboundPhoneme {
     }
 }
 
-#[derive(Debug)]
+impl Debug for UnboundPhoneme {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let attributes_strs = self
+            .attributes
+            .iter()
+            .map(|attr| format!("{:?}", attr))
+            .join(" ");
+
+        write!(f, "*[{}]*", attributes_strs)
+    }
+}
+
 pub struct Selector {
     pub code: SelectorCode,
     pub filter: Filter,
 }
 
-#[derive(Debug)]
+impl Debug for Selector {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{:?}", self.code, self.filter)
+    }
+}
+
 pub struct Filter {
     pub features: HashMap<Label, bool>,
     pub parameters: HashMap<Label, (bool, Label)>,
@@ -119,4 +166,25 @@ impl FromIterator<Attribute> for Filter {
 
         return filter;
     }
+}
+
+impl Debug for Filter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let features_strs = self
+            .features
+            .iter()
+            .sorted_by_key(|x| x.0.code)
+            .map(|(label, &mark)| format!("{}{}", mark_char(mark), label));
+        let parameter_strs = self
+            .parameters
+            .iter()
+            .sorted_by_key(|x| x.0.code)
+            .map(|(param, (mark, var))| format!("{}{}.{}", mark_char(*mark), param, var));
+
+        write!(f, "({})", features_strs.chain(parameter_strs).join(" "))
+    }
+}
+
+fn mark_char(mark: bool) -> char {
+    if mark { '+' } else { '-' }
 }

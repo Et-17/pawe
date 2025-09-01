@@ -1,13 +1,16 @@
+use itertools::Itertools;
+
 use crate::evolution::Rule;
 use crate::phonemes::Phoneme;
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::rc::Rc;
 
 type LabelCode = u16;
 
 pub struct Label {
-    code: LabelCode,
-    label: Rc<String>,
+    pub code: LabelCode,
+    pub label: Rc<String>,
 }
 
 impl Label {
@@ -56,7 +59,7 @@ impl std::fmt::Display for Label {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct LabelEncoding {
     table: HashMap<String, Label>,
     next_code: LabelCode,
@@ -108,7 +111,15 @@ impl Extend<String> for LabelEncoding {
     }
 }
 
-#[derive(Debug, Default)]
+impl Debug for LabelEncoding {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_set()
+            .entries(self.table.values().sorted_by_key(|x| x.code))
+            .finish()
+    }
+}
+
+#[derive(Default)]
 pub struct ParameterEncoding {
     p_table: HashMap<String, Label>,
     v_table: HashMap<LabelCode, LabelEncoding>,
@@ -150,6 +161,21 @@ impl ParameterEncoding {
             .and_then(|v_le| v_le.encode(variant));
 
         Some((p_label, v_label_opt))
+    }
+}
+
+impl Debug for ParameterEncoding {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let empty = LabelEncoding::default();
+
+        f.debug_map()
+            .entries(
+                self.p_table
+                    .values()
+                    .sorted_by_key(|x| x.code)
+                    .map(|l| (l, self.v_table.get(&l.code).unwrap_or(&empty))),
+            )
+            .finish()
     }
 }
 
