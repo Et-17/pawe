@@ -3,7 +3,7 @@ use std::fmt::Debug;
 
 use itertools::Itertools;
 
-use crate::config::Label;
+use crate::config::{Character, Label};
 
 pub type SelectorCode = u8;
 
@@ -11,8 +11,9 @@ pub type SelectorCode = u8;
 pub enum Attribute {
     Feature(bool, Label),
     Parameter(bool, Label, Label),
-    Character(Phoneme),
+    Character(Character),
     Selection(SelectorCode),
+    BoundPhoneme(Phoneme),
 }
 
 impl Attribute {
@@ -24,7 +25,7 @@ impl Attribute {
         if let Self::Selection(code) = self {
             selection_table
                 .get(&code)
-                .map(|&selected_phoneme| Attribute::Character(selected_phoneme.clone()))
+                .map(|&selected_phoneme| Attribute::BoundPhoneme(selected_phoneme.clone()))
                 .unwrap_or(self)
         } else {
             self
@@ -39,8 +40,9 @@ impl Debug for Attribute {
             Attribute::Parameter(mark, param, var) => {
                 write!(f, "{}{}.{}", mark_char(*mark), param, var)
             }
-            Attribute::Character(phoneme) => write!(f, "{:?}", phoneme),
+            Attribute::Character(definition) => write!(f, "{}", definition.symbol),
             Attribute::Selection(code) => write!(f, "{}", code),
+            Attribute::BoundPhoneme(phoneme) => write!(f, "{:?}", phoneme),
         }
     }
 }
@@ -49,14 +51,26 @@ impl Debug for Attribute {
 pub struct Phoneme {
     pub features: HashMap<Label, bool>,
     pub parameters: HashMap<Label, Label>,
+    pub base: Option<Character>,
 }
 
 impl Phoneme {
-    pub fn new() -> Self {
+    pub fn new(base: Option<Character>) -> Self {
         Self {
             features: HashMap::new(),
             parameters: HashMap::new(),
+            base,
         }
+    }
+
+    pub fn add_character(&mut self, character: Character) -> () {
+        // We have to clone before inserting the new character because if we
+        // add the phoneme before inserting the character, it will take whatever
+        // the new character's base is as this phonemes base, and won't take
+        // the character as the new base.
+        let phoneme = character.phoneme.clone();
+        self.base.get_or_insert(character);
+        self.add_phoneme(phoneme);
     }
 
     // Adds all the attributes from the given phoneme to this phoneme, so that
@@ -64,6 +78,9 @@ impl Phoneme {
     pub fn add_phoneme(&mut self, phoneme: Phoneme) -> () {
         self.features.extend(phoneme.features);
         self.parameters.extend(phoneme.parameters);
+        if let Some(new_base) = phoneme.base {
+            self.base.get_or_insert(new_base);
+        }
     }
 
     // This function will discard selector references and negative parameters
@@ -76,9 +93,12 @@ impl Phoneme {
                 self.parameters.insert(param, variant);
             }
             Attribute::Character(definition) => {
-                self.add_phoneme(definition);
+                self.add_character(definition);
             }
             Attribute::Selection(_) => (),
+            Attribute::BoundPhoneme(phoneme) => {
+                self.add_phoneme(phoneme);
+            }
         }
     }
 
@@ -98,11 +118,50 @@ impl Phoneme {
             .iter()
             .all(|(param, var)| other.get(param).is_some_and(|o_var| var == o_var))
     }
+
+    // Converts this phoneme to a set of Attributes assuming that there is a
+    // base phoneme. If there is no base, it simple returns an empty Vec
+    fn attr_display(&self) -> Vec<Attribute> {
+        let mut attrs = Vec::new();
+        if let Some(ref base_value) = self.base {
+            attrs.push(Attribute::Character(base_value.clone()));
+        }
+
+        for (param, self_value) in self.parameters.iter() {
+            if let Some(ref base) = self.base {
+                if let Some(base_value) = base.phoneme.parameters.get(&param) {
+                    if *self_value == *base_value {
+                        continue;
+                    }
+                }
+            }
+
+            attrs.push(Attribute::Parameter(
+                true,
+                param.clone(),
+                self_value.clone(),
+            ));
+        }
+
+        for (feat, self_value) in self.features.iter() {
+            if let Some(ref base) = self.base {
+                if let Some(base_value) = base.phoneme.features.get(&feat) {
+                    if *self_value == *base_value {
+                        continue;
+                    }
+                }
+            }
+
+            attrs.push(Attribute::Feature(self_value.clone(), feat.clone()));
+        }
+
+        attrs
+    }
 }
 
 impl FromIterator<Attribute> for Phoneme {
     fn from_iter<T: IntoIterator<Item = Attribute>>(iter: T) -> Self {
-        let mut phoneme = Self::new();
+        let mut phoneme = Self::new(None);
 
         for attribute in iter {
             phoneme.add_attribute(attribute);
@@ -114,18 +173,26 @@ impl FromIterator<Attribute> for Phoneme {
 
 impl Debug for Phoneme {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let features_strs = self
-            .features
-            .iter()
-            .sorted_by_key(|x| x.0.code)
-            .map(|(label, &mark)| format!("{}{}", mark_char(mark), label));
-        let parameter_strs = self
-            .parameters
-            .iter()
-            .sorted_by_key(|x| x.0.code)
-            .map(|(param, var)| format!("+{}.{}", param, var));
+        let attrs = self.attr_display();
+        if attrs.len() == 0 {
+            return write!(f, "EMPTY=PHONEME");
+        }
+        if attrs.len() == 1 {
+            if let Attribute::Character(character) = &attrs[0] {
+                return write!(f, "{:?}", character);
+            }
+        }
 
-        write!(f, "[{}]", features_strs.chain(parameter_strs).join(" "))
+        write!(f, "[")?;
+        let mut attrs_iter = attrs.iter();
+        attrs_iter
+            .next()
+            .map(|attr| write!(f, "{:?}", attr))
+            .transpose()?;
+        for attr in attrs_iter {
+            write!(f, " {:?}", attr)?;
+        }
+        write!(f, "]")
     }
 }
 

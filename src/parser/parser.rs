@@ -1,6 +1,6 @@
 use itertools::Itertools;
 
-use crate::config::{Config, Label};
+use crate::config::{Character, CharacterDefinition, Config, Label};
 use crate::error_handling::{Error, Position};
 use crate::evolution::{Environment, EnvironmentAtom, InputAtom, Rule};
 use crate::phonemes::{Attribute, Filter, Phoneme, Selector, SelectorCode, UnboundPhoneme};
@@ -148,7 +148,14 @@ fn parse_character_def(
     confirm_token_type(file, RawToken::PhonemeOpen, ExpectedPhoneme, char_token.pos)?;
     let phoneme = parse_phoneme(file, config)?;
 
-    if config.characters.insert(char, phoneme).is_some() {
+    if config
+        .characters
+        .insert(
+            char.clone(),
+            Character::new(CharacterDefinition::new(char, phoneme)),
+        )
+        .is_some()
+    {
         return Err(Redefinition.at(char_token.pos).into());
     }
 
@@ -251,7 +258,7 @@ fn parse_evolution_rule(
             RawToken::UnmarkedIdentifier(ident) => {
                 match parse_character(config, ident, token.pos) {
                     Ok(Attribute::Character(character)) => {
-                        input.push(InputAtom::Phoneme(character))
+                        input.push(InputAtom::Phoneme(character.into()))
                     }
                     Ok(_) => (), // won't reach here
                     Err(err) => errors.push(err),

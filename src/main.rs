@@ -15,6 +15,7 @@ fn main() -> parser::PResultV<()> {
     let mut word: Vec<_> = vec!["l", "o", "w", "k", "s", "n", "e", "h₂"]
         .into_iter()
         .map(|c| config.characters.get(c).unwrap().clone())
+        .map(|c| c.into())
         .collect();
 
     println!("Configured word:");

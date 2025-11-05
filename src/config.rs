@@ -179,12 +179,38 @@ impl Debug for ParameterEncoding {
     }
 }
 
+#[derive(Clone)]
+pub struct CharacterDefinition {
+    pub symbol: String,
+    pub phoneme: Phoneme,
+}
+
+impl CharacterDefinition {
+    pub fn new(symbol: String, phoneme: Phoneme) -> Self {
+        Self { symbol, phoneme }
+    }
+}
+
+impl Debug for CharacterDefinition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.symbol)
+    }
+}
+
+pub type Character = Rc<CharacterDefinition>;
+
+impl Into<Phoneme> for Character {
+    fn into(self) -> Phoneme {
+        std::iter::once(crate::phonemes::Attribute::Character(self)).collect()
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct Config {
     pub languages: LabelEncoding,
     pub features: LabelEncoding,
     pub parameters: ParameterEncoding,
-    pub characters: HashMap<String, Phoneme>,
+    pub characters: HashMap<String, Character>,
     pub evolutions: HashMap<Label, HashMap<Label, Vec<Rule>>>,
 }
 
