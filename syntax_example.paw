@@ -41,6 +41,7 @@ characters {
     h₂ [+type.consonant +place.laryngeal +manner.fricative -lateral -voiced +length.short +pieLaryngeal.aColoring];
     h₃ [+type.consonant +place.laryngeal +manner.fricative -lateral -voiced +length.short +pieLaryngeal.oColoring];
     w [+type.consonant +place.velar +manner.approximant +labialized -lateral -voiced +length.short];
+	k [+type.consonant +place.velar +manner.plosive -lateral -voiced +length.short];
 }
 
 // Establish necessary information for vowels

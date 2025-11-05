@@ -63,6 +63,23 @@ impl Phoneme {
             Attribute::Selection(_) => (),
         }
     }
+
+    pub fn matches(&self, other: &Phoneme) -> bool {
+        Self::features_matches(&self.features, &other.features)
+            && Self::parameters_matches(&self.parameters, &other.parameters)
+    }
+
+    fn features_matches(pattern: &HashMap<Label, bool>, other: &HashMap<Label, bool>) -> bool {
+        pattern
+            .iter()
+            .all(|(feat, mark)| other.get(feat).is_some_and(|o| mark == o))
+    }
+
+    fn parameters_matches(pattern: &HashMap<Label, Label>, other: &HashMap<Label, Label>) -> bool {
+        pattern
+            .iter()
+            .all(|(param, var)| other.get(param).is_some_and(|o_var| var == o_var))
+    }
 }
 
 impl FromIterator<Attribute> for Phoneme {
@@ -153,6 +170,28 @@ impl Filter {
             }
             _ => (),
         }
+    }
+
+    pub fn matches(&self, other: &Phoneme) -> bool {
+        Self::features_matches(&self.features, &other.features)
+            && Self::parameters_matches(&self.parameters, &other.parameters)
+    }
+
+    fn features_matches(pattern: &HashMap<Label, bool>, other: &HashMap<Label, bool>) -> bool {
+        pattern
+            .iter()
+            .all(|(feat, mark)| other.get(feat).is_some_and(|o| mark == o))
+    }
+
+    fn parameters_matches(
+        pattern: &HashMap<Label, (bool, Label)>,
+        other: &HashMap<Label, Label>,
+    ) -> bool {
+        pattern.iter().all(|(param, (mark, var))| {
+            other
+                .get(param)
+                .is_some_and(|o_var| (var == o_var) == *mark)
+        })
     }
 }
 
