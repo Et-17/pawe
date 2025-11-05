@@ -68,11 +68,11 @@ pub struct Rule {
 // This scans through the word trying to apply the rule, and if it applies it
 // successfully, it will go back to the beginning of the word and try again,
 // until the word can no longer be evolved with the rule.
-pub fn do_rule<'a>(word: &'a [Phoneme], rule: &Rule) -> &'a [Phoneme] {
+pub fn do_rule<'a>(word: Vec<Phoneme>, rule: &Rule) -> Vec<Phoneme> {
     _do_rule(word, rule, 0)
 }
 
-fn _do_rule<'a>(word: &'a [Phoneme], rule: &Rule, start: usize) -> &'a [Phoneme] {
+fn _do_rule<'a>(word: Vec<Phoneme>, rule: &Rule, start: usize) -> Vec<Phoneme> {
     // If we reach the end of the word, stop
     if start >= word.len() {
         return word;
@@ -86,7 +86,7 @@ fn _do_rule<'a>(word: &'a [Phoneme], rule: &Rule, start: usize) -> &'a [Phoneme]
         }
     }
 
-    match do_rule_from_pos(word, rule, start) {
+    match do_rule_from_pos(&word, rule, start) {
         Some(new_word) => _do_rule(new_word, rule, 0),
         None => _do_rule(word, rule, start + 1),
     }
@@ -94,7 +94,7 @@ fn _do_rule<'a>(word: &'a [Phoneme], rule: &Rule, start: usize) -> &'a [Phoneme]
 
 // Tries to match the rule beginning at start. This will match word end
 // boundaries, but it will not match word start boundaries
-fn do_rule_from_pos<'a>(word: &[Phoneme], rule: &Rule, start: usize) -> Option<&'a [Phoneme]> {
+fn do_rule_from_pos<'a>(word: &[Phoneme], rule: &Rule, start: usize) -> Option<Vec<Phoneme>> {
     // Preënvironment
     let mut end_pre_environment = start;
     if let Some(env) = &rule.environment {
@@ -109,22 +109,43 @@ fn do_rule_from_pos<'a>(word: &[Phoneme], rule: &Rule, start: usize) -> Option<&
     )?;
 
     //Postenvironment
-    let mut end_post_environment = end_input;
     if let Some(env) = &rule.environment {
-        end_post_environment =
+        let end_post_environment =
             match_environment(&word[end_input..], &env.post_environment, end_input)?;
 
-        if env.match_word_end && end_post_environment < word.len() {
+        if env.match_word_end && end_post_environment != word.len() {
             return None;
         }
     }
 
-    println!(
-        "Found valid rule, with S: {start}, ePre: {end_pre_environment}, eI: {end_input}, and ePost: {end_post_environment}"
-    );
-    println!("{rule:?}");
+    Some(modify_word(
+        &rule.output,
+        &word[..end_pre_environment],
+        &word[end_input..],
+        &selection_table,
+    ))
+}
 
-    None
+fn modify_word(
+    rule_output: &[UnboundPhoneme],
+    pre: &[Phoneme],
+    post: &[Phoneme],
+    selection_table: &HashMap<SelectorCode, &Phoneme>,
+) -> Vec<Phoneme> {
+    // Clones galore! May the Omnissiah grant me the ability to be gentler with
+    // the memories of Its Machine Spirits.
+    pre.iter()
+        .cloned()
+        .chain(bind_output(rule_output, selection_table))
+        .chain(post.iter().cloned())
+        .collect()
+}
+
+fn bind_output(
+    rule_output: &[UnboundPhoneme],
+    selection_table: &HashMap<SelectorCode, &Phoneme>,
+) -> impl Iterator<Item = Phoneme> {
+    rule_output.iter().map(|up| up.bind(selection_table))
 }
 
 // Word boundary matching is not performed by this function, that must be
@@ -143,7 +164,7 @@ pub fn match_environment(word: &[Phoneme], env: &[EnvironmentAtom], start: usize
         end += 1;
     }
 
-    if env.len() > 0 && end == start {
+    if end != start + env.len() {
         None
     } else {
         Some(end)
@@ -169,7 +190,7 @@ pub fn match_input<'a>(
         }
     }
 
-    if input.len() > 0 && end == start {
+    if end != start + input.len() {
         None
     } else {
         Some((end, selection_map))

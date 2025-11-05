@@ -7,11 +7,29 @@ use crate::config::Label;
 
 pub type SelectorCode = u8;
 
+#[derive(Clone)]
 pub enum Attribute {
     Feature(bool, Label),
     Parameter(bool, Label, Label),
     Character(Phoneme),
     Selection(SelectorCode),
+}
+
+impl Attribute {
+    // If an attribute is already something concrete like a parameter, it will
+    // just return it as is, but if it's a selection, then it will attempt to
+    // get the target from the selection table. If the selection is invalid, it
+    // will just not bind
+    fn bind<'a>(self, selection_table: &HashMap<SelectorCode, &'a Phoneme>) -> Self {
+        if let Self::Selection(code) = self {
+            selection_table
+                .get(&code)
+                .map(|&selected_phoneme| Attribute::Character(selected_phoneme.clone()))
+                .unwrap_or(self)
+        } else {
+            self
+        }
+    }
 }
 
 impl Debug for Attribute {
@@ -111,8 +129,23 @@ impl Debug for Phoneme {
     }
 }
 
+#[derive(Clone)]
 pub struct UnboundPhoneme {
     pub attributes: Vec<Attribute>,
+}
+
+impl UnboundPhoneme {
+    // Binds this into a normal Phoneme. Invalid selectors are simply ignored,
+    // because Phoneme's constructor just ignores selector Attributes, and the
+    // Attribute's bind function just doesn't bind if the selection is invalid.
+    // Note that this creates a new Phoneme by cloning all the Attributes.
+    pub fn bind<'a>(&self, selection_table: &HashMap<SelectorCode, &'a Phoneme>) -> Phoneme {
+        self.attributes
+            .iter()
+            .cloned()
+            .map(|attr| attr.bind(selection_table))
+            .collect()
+    }
 }
 
 impl FromIterator<Attribute> for UnboundPhoneme {

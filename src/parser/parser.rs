@@ -375,12 +375,12 @@ fn parse_evolution_environment(
                 Err(mut errs) => errors.append(&mut errs),
             },
             RawToken::FilterOpen => match parse_filter(file, config) {
-                Ok(filter) => pre_environment.push(EnvironmentAtom::Filter(filter)),
+                Ok(filter) => post_environment.push(EnvironmentAtom::Filter(filter)),
                 Err(mut errs) => errors.append(&mut errs),
             },
             RawToken::UnmarkedIdentifier(ident) => {
                 match parse_character(config, ident, token.pos) {
-                    Ok(character) => pre_environment.push(EnvironmentAtom::Phoneme(
+                    Ok(character) => post_environment.push(EnvironmentAtom::Phoneme(
                         std::iter::once(character).collect(),
                     )),
                     Err(err) => errors.push(err),
