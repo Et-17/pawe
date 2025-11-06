@@ -3,6 +3,7 @@
 languages {
     ProtoIndoEuropean;
     PreProtoGermanic;
+	EarlyProtoGermanic;
 }
 
 // Establish some basic distinctions
@@ -29,6 +30,7 @@ features {
     voiced;
     lateral;
     labialized;
+	aspirated;
 }
 
 characters {
@@ -40,8 +42,9 @@ characters {
     h₁ [+type.consonant +place.laryngeal +manner.fricative -lateral -voiced +length.short +pieLaryngeal.neutral];
     h₂ [+type.consonant +place.laryngeal +manner.fricative -lateral -voiced +length.short +pieLaryngeal.aColoring];
     h₃ [+type.consonant +place.laryngeal +manner.fricative -lateral -voiced +length.short +pieLaryngeal.oColoring];
-    w [+type.consonant +place.velar +manner.approximant +labialized -lateral -voiced +length.short];
+    w [+type.consonant +place.velar +manner.approximant +labialized -lateral +voiced +length.short];
 	k [+type.consonant +place.velar +manner.plosive -lateral -voiced +length.short];
+	y [+type.consonant +place.palatal +manner.approximant -labialized -lateral +voiced +length.short];
 }
 
 // Establish necessary information for vowels
@@ -56,15 +59,18 @@ features {
 }
 
 characters {
-    a [+type.vowel +height.open +backness.central -rounded +syllabic +length.short];
-	i [+type.vowel +height.close +backness.front -rounded +syllabic +length.short];
-	u [+type.vowel +height.close +backness.back +rounded +syllabic +length.short];
-	e [+type.vowel +height.close_mid +backness.front -rounded +syllabic +length.short];
-	o [+type.vowel +height.close_mid +backness.back +rounded +syllabic +length.short];
-	ə [+type.vowel +height.mid +backness.central -rounded +syllabic +length.short];
+	ɑ [+type.vowel +height.open +backness.back -rounded +syllabic +length.short -stressed];
+    a [+type.vowel +height.open +backness.central -rounded +syllabic +length.short -stressed];
+	i [+type.vowel +height.close +backness.front -rounded +syllabic +length.short -stressed];
+	u [+type.vowel +height.close +backness.back +rounded +syllabic +length.short -stressed];
+	e [+type.vowel +height.close_mid +backness.front -rounded +syllabic +length.short -stressed];
+	o [+type.vowel +height.close_mid +backness.back +rounded +syllabic +length.short -stressed];
+	ó [o +stressed];
+	ə [+type.vowel +height.mid +backness.central -rounded +syllabic +length.short -stressed];
 }
 
 // Establish rules for evolution
+// The rules that I use in this example file are from various Wikipedia pages
 
 evolve ProtoIndoEuropean to PreProtoGermanic {
 	// Allophonic colouring of /e/ adjacent to laryngeal consonants
@@ -105,4 +111,52 @@ evolve ProtoIndoEuropean to PreProtoGermanic {
 	1(+place.velar +labialized) > [1 -labialized] / _ u;
 	1(+place.velar +labialized) > [1 -labialized] / u _;
 	1(+place.velar +labialized) > [1 -labialized] / _ t;
+}
+
+evolve PreProtoGermanic to EarlyProtoGermanic {
+	// Loss of word-final non-close short vowels, including preceeding /j/ or /w/
+	y (+type.vowel -height.close +length.short) > / _ #;
+	w (+type.vowel -height.close +length.short) > / _ #;
+	(+type.vowel -height.close +length.short) > / _ #;
+
+	// Grimm's law <3
+	// Voiceless plosives become fricatives, unless preceeded by an obstruent
+	1(+type.consonant -voiced +manner.plosive) > [1 +manner.fricative] / (-manner.plosive -manner.fricative -manner.nasal) _;
+	// Voiced plosives are devoiced
+	1(+type.consonant +voiced +manner.plosive) > [1 -voiced];
+	// Aspirated plosives become voiced plosives, fricatives between vowels
+	1(+type.consonant +voiced +manner.plosive +aspirated) > [1 -aspirated +manner.fricative] / (+type.vowel) _ (+type.vowel);
+	1(+type.consonant +voiced +manner.plosive +aspirated) > [1 -aspirated];
+
+	// Verner's law
+	1(+manner.fricative -voiced) > [1 +voiced] / (+type.vowel -stressed) _;
+	1(+manner.fricative -voiced) > [1 +voiced] / (+type.vowel -stressed) (+manner.nasal) _;
+	1(+manner.fricative -voiced) > [1 +voiced] / (+type.vowel -stressed) (+manner.approximant) _;
+
+	// Unstressed /owo/ > /oː/
+	o w o > [o +length.overlong];
+
+	// Unstressed /ew/ > /ow/ before a consonant or word-finally
+	e > o / _ w (+type.consonant);
+	e > o / _ w #;
+
+	// Unstressed /e/ > /i/ except before /r/
+	e > i;
+	e y > [i +length.long];
+
+	// Unstressed /ji/ > /i/
+	i y i > [i +length.overlong];
+	y i > i;
+
+	// Merging of non-close back vowels
+	// We need to state this explicitly to prevent an infinite loop
+	// o > ɑ;
+	// a > ɑ;
+	// [o +length.long] > [ɑ +length.long];
+	// [a +length.long] > [ɑ +length.long];
+	// [o +length.overlong] > [ɑ +length.overlong];
+	// [a +length.overlong] > [ɑ +length.overlong];
+
+	1(+height.close_mid +backness.back) > [ɑ 1 +height.open +backness.back -rounded];
+	1(+height.open +backness.central) > [ɑ 1 +height.open +backness.back -rounded];
 }
