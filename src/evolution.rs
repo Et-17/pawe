@@ -50,7 +50,6 @@ impl std::fmt::Debug for EnvironmentAtom {
     }
 }
 
-#[derive(Debug)]
 pub struct Environment {
     pub match_word_start: bool,
     pub match_word_end: bool,
@@ -58,11 +57,49 @@ pub struct Environment {
     pub post_environment: Vec<EnvironmentAtom>,
 }
 
-#[derive(Debug)]
+impl std::fmt::Debug for Environment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.match_word_start {
+            write!(f, "# ")?;
+        }
+
+        for atom in &self.pre_environment {
+            write!(f, "{:?} ", atom)?;
+        }
+        write!(f, "_")?;
+        for atom in &self.post_environment {
+            write!(f, " {:?}", atom)?;
+        }
+
+        if self.match_word_end {
+            write!(f, " #")?;
+        }
+        Ok(())
+    }
+}
+
 pub struct Rule {
     pub input: Vec<InputAtom>,
     pub output: Vec<UnboundPhoneme>,
     pub environment: Option<Environment>,
+}
+
+impl std::fmt::Debug for Rule {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for atom in &self.input {
+            write!(f, "{:?} ", atom)?;
+        }
+        write!(f, ">")?;
+        for atom in &self.output {
+            write!(f, " {:?}", atom)?;
+        }
+
+        if let Some(env) = &self.environment {
+            write!(f, " / {:?}", env)?;
+        }
+
+        Ok(())
+    }
 }
 
 // This scans through the word trying to apply the rule, and if it applies it

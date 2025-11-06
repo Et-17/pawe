@@ -149,14 +149,6 @@ evolve PreProtoGermanic to EarlyProtoGermanic {
 	y i > i;
 
 	// Merging of non-close back vowels
-	// We need to state this explicitly to prevent an infinite loop
-	// o > ɑ;
-	// a > ɑ;
-	// [o +length.long] > [ɑ +length.long];
-	// [a +length.long] > [ɑ +length.long];
-	// [o +length.overlong] > [ɑ +length.overlong];
-	// [a +length.overlong] > [ɑ +length.overlong];
-
 	1(+height.close_mid +backness.back) > [ɑ 1 +height.open +backness.back -rounded];
 	1(+height.open +backness.central) > [ɑ 1 +height.open +backness.back -rounded];
 }
