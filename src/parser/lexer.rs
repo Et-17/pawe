@@ -159,8 +159,10 @@ impl MarkedChar {
     }
 }
 
+const FORBIDDEN_IDENTIFIER_CHARACTERS: &str = "{}()[]/>*?;";
+
 fn intra_identifier_character(c: char) -> bool {
-    c.is_alphanumeric() || c == '.' || c == '_'
+    !c.is_whitespace() && FORBIDDEN_IDENTIFIER_CHARACTERS.chars().all(|fc| fc != c)
 }
 
 fn read_raw_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> String {

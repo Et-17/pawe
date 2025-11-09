@@ -83,23 +83,29 @@ features {
 characters {
 	V [+type.vowel -rounded +syllabic +length.short -stressed];
 
-	a [V +height.open +backness.back];
+	a [V +height.open +backness.central];
 	á [a +stressed];
 	ā [a +length.long];
-	// ā́ [a +length.long +stressed];
+	ā́ [a +length.long +stressed];
 	â [a +length.overlong];
+
+	ɑ [V +height.open +backness.back];
+	ɑ́ [ɑ +stressed];
+	ɑ̄ [ɑ +length.long];
+	ɑ̄́ [ɑ +length.long +stressed];
+	ɑ̂ [ɑ +length.overlong];
 
 	i [V +height.close +backness.front];
 	í [i +stressed];
 	ī [i +length.long];
-	// ī́ [i +length.long +stressed];
+	ī́ [i +length.long +stressed];
 	î [i +length.overlong];
 	ĭ [i -syllabic];
 
 	u [V +height.close +backness.back +rounded];
 	ú [u +stressed];
 	ū [u +length.long];
-	// ū́ [u +length.long +stressed];
+	ū́ [u +length.long +stressed];
 	û [u +length.overlong];
 	ŭ [u -syllabic];
 
@@ -174,7 +180,7 @@ evolve PreProtoGermanic to EarlyProtoGermanic {
 	y (+type.vowel -height.close +length.short) > / _ #;
 	w (+type.vowel -height.close +length.short) > / _ #;
 	(+type.vowel -height.close +length.short) > / _ #;
-	// Single-syllable words were not affected, but clitics here, and I don't
+	// Single-syllable words were not affected, but clitics where, and I don't
 	// know how to implement that in this example
 
 	// Grimm's law <3
@@ -212,6 +218,7 @@ evolve PreProtoGermanic to EarlyProtoGermanic {
 
 	// Merging of non-close back vowels
 	1(-height.close +backness.back) > [1 +height.open -rounded];
+	1(+height.open +backness.central) > [1 +backness.back];
 
 	// Reanalyze /Vw/ and /Vj/ as /Vu/ and /Vi/
 	w > [u -syllabic] / (+syllabic) _ (-syllabic);
