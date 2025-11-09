@@ -1,5 +1,6 @@
 use itertools::PeekingNext;
 
+use crate::config::Character;
 use crate::phonemes::{Filter, Phoneme, Selector, SelectorCode, UnboundPhoneme};
 use std::collections::HashMap;
 use std::iter::Peekable;
@@ -102,11 +103,20 @@ impl std::fmt::Debug for Rule {
 
 // This scans through the word trying to apply the rule, and if it applies it
 // successfully, it will continue to scan through the new word.
-pub fn do_rule<'a>(word: Vec<Phoneme>, rule: &Rule) -> Vec<Phoneme> {
-    _do_rule(word, rule, 0)
+pub fn do_rule<'a>(
+    word: Vec<Phoneme>,
+    rule: &Rule,
+    character_table: &HashMap<String, Character>,
+) -> Vec<Phoneme> {
+    _do_rule(word, rule, character_table, 0)
 }
 
-fn _do_rule<'a>(word: Vec<Phoneme>, rule: &Rule, start: usize) -> Vec<Phoneme> {
+fn _do_rule<'a>(
+    word: Vec<Phoneme>,
+    rule: &Rule,
+    character_table: &HashMap<String, Character>,
+    start: usize,
+) -> Vec<Phoneme> {
     // If we reach the end of the word, stop
     if start >= word.len() {
         return word;
@@ -120,13 +130,18 @@ fn _do_rule<'a>(word: Vec<Phoneme>, rule: &Rule, start: usize) -> Vec<Phoneme> {
         }
     }
 
-    let new_word = do_rule_from_pos(&word, rule, start).unwrap_or(word);
-    _do_rule(new_word, rule, start + 1)
+    let new_word = do_rule_from_pos(&word, rule, character_table, start).unwrap_or(word);
+    _do_rule(new_word, rule, character_table, start + 1)
 }
 
 // Tries to match the rule beginning at start. This will match word end
 // boundaries, but it will not match word start boundaries.
-fn do_rule_from_pos<'a>(word: &[Phoneme], rule: &Rule, start: usize) -> Option<Vec<Phoneme>> {
+fn do_rule_from_pos<'a>(
+    word: &[Phoneme],
+    rule: &Rule,
+    character_table: &HashMap<String, Character>,
+    start: usize,
+) -> Option<Vec<Phoneme>> {
     // Preënvironment
     let mut end_pre_environment = start;
     if let Some(env) = &rule.environment {
@@ -155,6 +170,7 @@ fn do_rule_from_pos<'a>(word: &[Phoneme], rule: &Rule, start: usize) -> Option<V
         &word[..end_pre_environment],
         &word[end_input..],
         &selection_table,
+        character_table,
     ))
 }
 
@@ -163,12 +179,13 @@ fn modify_word(
     pre: &[Phoneme],
     post: &[Phoneme],
     selection_table: &HashMap<SelectorCode, &Phoneme>,
+    character_table: &HashMap<String, Character>,
 ) -> Vec<Phoneme> {
     // Clones galore! May the Omnissiah grant me the ability to be gentler with
     // the memories of Its Machine Spirits.
     pre.iter()
         .cloned()
-        .chain(bind_output(rule_output, selection_table))
+        .chain(bind_output(rule_output, selection_table, character_table))
         .chain(post.iter().cloned())
         .collect()
 }
@@ -176,8 +193,12 @@ fn modify_word(
 fn bind_output(
     rule_output: &[UnboundPhoneme],
     selection_table: &HashMap<SelectorCode, &Phoneme>,
+    character_table: &HashMap<String, Character>,
 ) -> impl Iterator<Item = Phoneme> {
-    rule_output.iter().map(|up| up.bind(selection_table))
+    rule_output
+        .iter()
+        .map(|up| up.bind(selection_table))
+        .map(|p| p.rebase(character_table))
 }
 
 // Word boundary matching is not performed by this function, that must be

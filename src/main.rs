@@ -39,8 +39,8 @@ fn test() -> Result<(), Vec<Error<impl ErrorType>>> {
             println!("Evolving from {start_lang} to {end_lang}");
 
             for rule in rules {
-                word = do_rule(word, &rule);
-                word.iter().for_each(|c| print!("{:?} ", c));
+                word = do_rule(word, &rule, &config.characters);
+                word.iter().for_each(|c| print!("{:?}", c));
                 println!();
             }
         }

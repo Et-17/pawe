@@ -157,6 +157,56 @@ impl Phoneme {
 
         attrs
     }
+
+    // Goes through the available characters and tries to find a base that would
+    // require less modification than the current base.
+    pub fn rebase(self, characters: &HashMap<String, Character>) -> Self {
+        if let Some(new_base) = self.best_base(characters) {
+            Self {
+                base: Some(new_base.clone()),
+                ..self
+            }
+        } else {
+            self
+        }
+    }
+
+    // Finds the best base for the phoneme
+    fn best_base<'a>(&self, characters: &'a HashMap<String, Character>) -> Option<&'a Character> {
+        characters
+            .values()
+            .map(|c| (c, self.count_necessary_modifications(&c.phoneme)))
+            .take_while_inclusive(|(_, mods)| *mods != 0)
+            .min_by_key(|(_, mods)| *mods)
+            .map(|(c, _)| c)
+    }
+
+    // Counts the necessary modifications in order to represent this phoneme in
+    // terms of the given base.
+    fn count_necessary_modifications(&self, base: &Phoneme) -> usize {
+        // self.parameters.iter().filter(|(param, self_val)| base.parameters.get())
+        let phoneme_mods = self
+            .parameters
+            .iter()
+            .filter(|(param, self_val)| {
+                base.parameters
+                    .get(param)
+                    .is_none_or(|base_val| **self_val != *base_val)
+            })
+            .count();
+
+        let features_mods = self
+            .features
+            .iter()
+            .filter(|(feat, self_val)| {
+                base.features
+                    .get(feat)
+                    .is_none_or(|base_val| **self_val != *base_val)
+            })
+            .count();
+
+        phoneme_mods + features_mods
+    }
 }
 
 impl FromIterator<Attribute> for Phoneme {

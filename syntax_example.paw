@@ -43,7 +43,7 @@ characters {
 	PLOSIVE [CONSONANT +manner.plosive];
 	p [PLOSIVE +place.bilabial];
 	b [p +voiced];
-	t [PLOSIVE +place.alveolar];
+	t [PLOSIVE +place.dental];
 	d [t +voiced];
 	k [PLOSIVE +place.velar];
 	g [k +voiced];
@@ -53,8 +53,10 @@ characters {
 	v [f +voiced];
 	s [FRICATIVE +place.alveolar];
 	z [s +voiced];
-	x [FRICATIVE +place.velar];
-	ɣ [x +voiced];
+	h [FRICATIVE +place.velar];
+	ɣ [h +voiced];
+	þ [FRICATIVE +place.dental];
+	ð [þ +voiced];
 	LARYNGEAL [FRICATIVE +place.laryngeal];
 	h₁ [LARYNGEAL +pieLaryngeal.neutral];
 	h₂ [LARYNGEAL +pieLaryngeal.aColoring];
@@ -62,8 +64,9 @@ characters {
 
 	APPROXIMANT [CONSONANT +manner.approximant +voiced];
 	l [APPROXIMANT +place.alveolar +lateral];
-	w [APPROXIMANT +place.velar +labialized];
+	r [APPROXIMANT +place.alveolar];
 	y [APPROXIMANT +place.palatal];
+	w [APPROXIMANT +place.velar +labialized];
 }
 
 // Establish necessary information for vowels
@@ -78,14 +81,41 @@ features {
 }
 
 characters {
-	ɑ [+type.vowel +height.open +backness.back -rounded +syllabic +length.short -stressed];
-    a [+type.vowel +height.open +backness.central -rounded +syllabic +length.short -stressed];
-	i [+type.vowel +height.close +backness.front -rounded +syllabic +length.short -stressed];
-	u [+type.vowel +height.close +backness.back +rounded +syllabic +length.short -stressed];
-	e [+type.vowel +height.close_mid +backness.front -rounded +syllabic +length.short -stressed];
-	o [+type.vowel +height.close_mid +backness.back +rounded +syllabic +length.short -stressed];
+	V [+type.vowel -rounded +syllabic +length.short -stressed];
+
+	a [V +height.open +backness.back];
+	á [a +stressed];
+	ā [a +length.long];
+	// ā́ [a +length.long +stressed];
+	â [a +length.overlong];
+
+	i [V +height.close +backness.front];
+	í [i +stressed];
+	ī [i +length.long];
+	// ī́ [i +length.long +stressed];
+	î [i +length.overlong];
+	ĭ [i -syllabic];
+
+	u [V +height.close +backness.back +rounded];
+	ú [u +stressed];
+	ū [u +length.long];
+	// ū́ [u +length.long +stressed];
+	û [u +length.overlong];
+	ŭ [u -syllabic];
+
+	e [V +height.close_mid +backness.front];
+	é [e +stressed];
+	ē [e +length.long];
+	ḗ [e +length.long +stressed];
+	ê [e +length.overlong];
+
+	o [V +height.close_mid +backness.back +rounded];
 	ó [o +stressed];
-	ə [+type.vowel +height.mid +backness.central -rounded +syllabic +length.short -stressed];
+	ō [o +length.long];
+	ṓ [o +length.long +stressed];
+	ô [o +length.overlong];
+
+	ə [V +height.mid +backness.central];
 }
 
 // Establish rules for evolution
@@ -181,6 +211,11 @@ evolve PreProtoGermanic to EarlyProtoGermanic {
 	y i > i;
 
 	// Merging of non-close back vowels
-	1(+height.close_mid +backness.back) > [ɑ 1 +height.open +backness.back -rounded];
-	1(+height.open +backness.central) > [ɑ 1 +height.open +backness.back -rounded];
+	1(-height.close +backness.back) > [1 +height.open -rounded];
+
+	// Reanalyze /Vw/ and /Vj/ as /Vu/ and /Vi/
+	w > [u -syllabic] / (+syllabic) _ (-syllabic);
+	w > [u -syllabic] / (+syllabic) _ #;
+	y > [i -syllabic] / (+syllabic) _ (-syllabic);
+	y > [i -syllabic] / (+syllabic) _ #;
 }
