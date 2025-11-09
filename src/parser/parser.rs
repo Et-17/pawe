@@ -353,6 +353,24 @@ fn parse_evolution_environment(
                     Err(err) => errors.push(err),
                 }
             }
+            RawToken::Optional => {
+                if !pre_environment.is_empty() {
+                    let new_atom =
+                        EnvironmentAtom::Optional(Box::new(pre_environment.pop().unwrap()));
+                    pre_environment.push(new_atom);
+                } else {
+                    errors.push(MisplacedOptional.at(token.pos));
+                }
+            }
+            RawToken::ZeroOrMore => {
+                if !pre_environment.is_empty() {
+                    let new_atom =
+                        EnvironmentAtom::ZeroOrMore(Box::new(pre_environment.pop().unwrap()));
+                    pre_environment.push(new_atom);
+                } else {
+                    errors.push(MisplacedZeroOrMore.at(token.pos));
+                }
+            }
             RawToken::WordBoundry => {
                 if first {
                     match_word_start = true;
@@ -391,6 +409,24 @@ fn parse_evolution_environment(
                         std::iter::once(character).collect(),
                     )),
                     Err(err) => errors.push(err),
+                }
+            }
+            RawToken::Optional => {
+                if !post_environment.is_empty() {
+                    let new_atom =
+                        EnvironmentAtom::Optional(Box::new(post_environment.pop().unwrap()));
+                    post_environment.push(new_atom);
+                } else {
+                    errors.push(MisplacedOptional.at(token.pos));
+                }
+            }
+            RawToken::ZeroOrMore => {
+                if !post_environment.is_empty() {
+                    let new_atom =
+                        EnvironmentAtom::ZeroOrMore(Box::new(post_environment.pop().unwrap()));
+                    post_environment.push(new_atom);
+                } else {
+                    errors.push(MisplacedZeroOrMore.at(token.pos));
                 }
             }
             RawToken::WordBoundry => match_word_end_pos = Some(token.pos),

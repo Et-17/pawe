@@ -28,6 +28,8 @@ pub enum ParseErrorType {
     AlreadyDefinedEvolution(String, String),
     NegativeParameterInPhoneme,
     MisplacedWordBoundary,
+    MisplacedOptional,
+    MisplacedZeroOrMore,
     MultipleTargets,
     UnexpectedToken(RawToken),
 
@@ -71,6 +73,13 @@ impl Display for ParseErrorType {
             Self::MisplacedWordBoundary => write!(
                 f,
                 "You can only match word boundaries at the start or end of environments"
+            ),
+            Self::MisplacedOptional => {
+                write!(f, "There is no matcher for this optional to be applied to")
+            }
+            Self::MisplacedZeroOrMore => write!(
+                f,
+                "There is no matcher for this zero-or-more to be applied to"
             ),
             Self::MultipleTargets => write!(f, "There are multiple targets in the environment"),
             Self::UnexpectedToken(token) => write!(f, "Unexpected token {:?}", token),

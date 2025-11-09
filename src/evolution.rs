@@ -1,5 +1,8 @@
+use itertools::PeekingNext;
+
 use crate::phonemes::{Filter, Phoneme, Selector, SelectorCode, UnboundPhoneme};
 use std::collections::HashMap;
+use std::iter::Peekable;
 
 pub enum InputAtom {
     Selector(Selector),
@@ -30,15 +33,8 @@ impl std::fmt::Debug for InputAtom {
 pub enum EnvironmentAtom {
     Filter(Filter),
     Phoneme(Phoneme),
-}
-
-impl EnvironmentAtom {
-    pub fn matches(&self, other: &Phoneme) -> bool {
-        match self {
-            Self::Filter(filter) => filter.matches(other),
-            Self::Phoneme(phoneme) => phoneme.matches(other),
-        }
-    }
+    Optional(Box<EnvironmentAtom>),
+    ZeroOrMore(Box<EnvironmentAtom>),
 }
 
 impl std::fmt::Debug for EnvironmentAtom {
@@ -46,6 +42,8 @@ impl std::fmt::Debug for EnvironmentAtom {
         match self {
             EnvironmentAtom::Filter(filter) => filter.fmt(f),
             EnvironmentAtom::Phoneme(phoneme) => phoneme.fmt(f),
+            EnvironmentAtom::Optional(atom) => write!(f, "{:?}?", atom),
+            EnvironmentAtom::ZeroOrMore(atom) => write!(f, "{:?}*", atom),
         }
     }
 }
@@ -103,8 +101,7 @@ impl std::fmt::Debug for Rule {
 }
 
 // This scans through the word trying to apply the rule, and if it applies it
-// successfully, it will go back to the beginning of the word and try again,
-// until the word can no longer be evolved with the rule.
+// successfully, it will continue to scan through the new word.
 pub fn do_rule<'a>(word: Vec<Phoneme>, rule: &Rule) -> Vec<Phoneme> {
     _do_rule(word, rule, 0)
 }
@@ -123,14 +120,12 @@ fn _do_rule<'a>(word: Vec<Phoneme>, rule: &Rule, start: usize) -> Vec<Phoneme> {
         }
     }
 
-    match do_rule_from_pos(&word, rule, start) {
-        Some(new_word) => _do_rule(new_word, rule, 0),
-        None => _do_rule(word, rule, start + 1),
-    }
+    let new_word = do_rule_from_pos(&word, rule, start).unwrap_or(word);
+    _do_rule(new_word, rule, start + 1)
 }
 
 // Tries to match the rule beginning at start. This will match word end
-// boundaries, but it will not match word start boundaries
+// boundaries, but it will not match word start boundaries.
 fn do_rule_from_pos<'a>(word: &[Phoneme], rule: &Rule, start: usize) -> Option<Vec<Phoneme>> {
     // Preënvironment
     let mut end_pre_environment = start;
@@ -194,17 +189,32 @@ fn bind_output(
 pub fn match_environment(word: &[Phoneme], env: &[EnvironmentAtom], start: usize) -> Option<usize> {
     let mut end = start;
 
-    for (base, matcher) in word.iter().zip(env.iter()) {
-        if !matcher.matches(base) {
-            return None;
-        }
-        end += 1;
+    let mut word_iter = word.iter().peekable();
+    let mut env_iter = env.iter();
+
+    while let Some(atom) = env_iter.next() {
+        end += match_environment_atom(atom, &mut word_iter)?;
     }
 
-    if end != start + env.len() {
-        None
-    } else {
-        Some(end)
+    Some(end)
+}
+
+// Matches an environment atom to the environment, returning either None if it
+// fails to match, or Some with the number of environment phonemes consumed
+fn match_environment_atom<'a>(
+    matcher: &EnvironmentAtom,
+    word: &mut Peekable<impl Iterator<Item = &'a Phoneme>>,
+) -> Option<usize> {
+    match matcher {
+        EnvironmentAtom::Optional(atom) => Some(match_environment_atom(&atom, word).unwrap_or(0)),
+        EnvironmentAtom::ZeroOrMore(atom) => match_environment_atom(&atom, word)
+            .map(|c| c + match_environment_atom(matcher, word).unwrap_or(0)),
+        EnvironmentAtom::Filter(filter) => word
+            .peeking_next(|w_phoneme| filter.matches(w_phoneme))
+            .map(|_| 1),
+        EnvironmentAtom::Phoneme(phoneme) => word
+            .peeking_next(|w_phoneme| phoneme.matches(w_phoneme))
+            .map(|_| 1),
     }
 }
 

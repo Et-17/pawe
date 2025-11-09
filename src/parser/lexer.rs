@@ -103,6 +103,8 @@ pub enum RawToken {
     Environment, // /
     Target,      // _
     WordBoundry, // #
+    Optional,    // ?
+    ZeroOrMore,  // *
     EOL,         // ;
     Comment,     // //
 
@@ -229,6 +231,8 @@ fn lex_token<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> Option<T
             '/' => RawToken::Environment,
             '_' => RawToken::Target,
             '#' => RawToken::WordBoundry,
+            '?' => RawToken::Optional,
+            '*' => RawToken::ZeroOrMore,
             ';' => RawToken::EOL,
 
             '{' => RawToken::BlockOpen,

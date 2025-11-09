@@ -231,7 +231,7 @@ impl Debug for UnboundPhoneme {
             .map(|attr| format!("{:?}", attr))
             .join(" ");
 
-        write!(f, "*[{}]*", attributes_strs)
+        write!(f, "[{}]", attributes_strs)
     }
 }
 
