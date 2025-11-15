@@ -20,7 +20,7 @@ fn main() -> () {
 
 fn test() -> Result<(), Vec<Error>> {
     let mut lexer = FileLexer::lex_file("syntax_example.paw".into())?;
-    let config = parser::parser::parse_config_file(&mut lexer)?;
+    let config = parser::parse_config_file(&mut lexer)?;
 
     // let mut word: Vec<_> = vec!["t", "r", "é", "y", "e", "s"]
     let mut word: Vec<_> = vec!["l", "ó", "w", "k", "s", "n", "e", "h₂"]

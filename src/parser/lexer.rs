@@ -10,8 +10,6 @@ use itertools::{Itertools, PeekingNext};
 use crate::error_handling::{ErrorType, FilePosition, Result};
 use crate::phonemes::SelectorCode;
 
-// use super::ParseErrorType::FileError;
-
 #[derive(Debug)]
 pub enum LexerErrorType {
     FileError(std::io::Error),
