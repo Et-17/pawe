@@ -1,8 +1,5 @@
 use std::fmt::{Debug, Display};
 
-pub trait ErrorType: Display {}
-
-// 0:0 means that the error doesn't have a specific location
 #[derive(Copy, Clone, PartialEq)]
 pub struct FilePosition {
     pub line: usize,
@@ -17,44 +14,52 @@ impl Display for FilePosition {
 
 impl Debug for FilePosition {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self)
+        write!(f, "[{}]", self)
     }
 }
 
-#[derive(Clone, PartialEq)]
-pub enum Origin {
-    File(FilePosition),
-    Module(String),
-}
+pub trait ErrorType: Display + Debug {
+    fn module(&self) -> String;
 
-impl Display for Origin {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::File(fp) => write!(f, "{fp}"),
-            Self::Module(module) => write!(f, "{module}"),
+    fn at(self, pos: FilePosition) -> Error
+    where
+        Self: Sized + 'static,
+    {
+        Error {
+            pos: Some(pos),
+            module: self.module(),
+            error: Box::new(self),
+        }
+    }
+
+    fn sign(self) -> Error
+    where
+        Self: Sized + 'static,
+    {
+        Error {
+            pos: None,
+            module: self.module(),
+            error: Box::new(self),
         }
     }
 }
 
-// #[derive(PartialEq)]
+#[derive(Debug)]
 pub struct Error {
-    pub pos: Origin,
+    pub pos: Option<FilePosition>,
+    pub module: String,
     pub error: Box<dyn ErrorType>,
 }
 
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "\x1b[31;49;1m[{}]\x1b[39;49;1m  {}\x1b[0m",
-            self.pos, self.error
-        )
-    }
-}
-
-impl Debug for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self)
+        write!(f, "\x1b[31;49;1m[")?;
+        if let Some(pos) = self.pos {
+            write!(f, "{}", pos)?;
+        } else {
+            write!(f, "{}", self.module)?;
+        }
+        write!(f, "]\x1b[39;49;1m  {}\x1b[0m", self.error)
     }
 }
 
@@ -67,3 +72,17 @@ impl From<Error> for Vec<Error> {
         return errors;
     }
 }
+
+// Turns `errors` into a vector of type `E`. If it contains anything, it will
+// return `Err` with that vector. If it doesn't, it will return `Ok(ok)`
+pub fn check_errors<T, E, V: Into<Vec<E>>>(ok: T, errors: V) -> std::result::Result<T, Vec<E>> {
+    let conv_vec = errors.into();
+    if conv_vec.is_empty() {
+        Ok(ok)
+    } else {
+        Err(conv_vec)
+    }
+}
+
+pub type Result<T> = std::result::Result<T, Error>;
+pub type ResultV<T> = std::result::Result<T, Vec<Error>>;

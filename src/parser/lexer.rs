@@ -1,18 +1,37 @@
-use std::{
-    collections::VecDeque,
-    fmt::Debug,
-    fs::File,
-    io::{BufRead, BufReader},
-    iter::Peekable,
-    path::PathBuf,
-};
+use std::collections::VecDeque;
+use std::fmt::{Debug, Display};
+use std::fs::File;
+use std::io::{BufRead, BufReader};
+use std::iter::Peekable;
+use std::path::PathBuf;
 
 use itertools::{Itertools, PeekingNext};
 
-use crate::error_handling::{Error, FilePosition, Origin};
+use crate::error_handling::{ErrorType, FilePosition, Result};
 use crate::phonemes::SelectorCode;
 
-use super::ParseErrorType::FileError;
+// use super::ParseErrorType::FileError;
+
+#[derive(Debug)]
+pub enum LexerErrorType {
+    FileError(std::io::Error),
+}
+
+impl ErrorType for LexerErrorType {
+    fn module(&self) -> String {
+        String::from("lexer")
+    }
+}
+
+impl Display for LexerErrorType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::FileError(e) => write!(f, "File Error: {}", e),
+        }
+    }
+}
+
+use LexerErrorType::*;
 
 pub struct FileLexer {
     file: BufReader<File>,
@@ -21,7 +40,7 @@ pub struct FileLexer {
 }
 
 impl FileLexer {
-    fn lex_line(&mut self) -> Option<super::PResult<()>> {
+    fn lex_line(&mut self) -> Option<Result<()>> {
         let mut next_line = String::new();
         let read_amount = self.file.read_line(&mut next_line);
 
@@ -59,11 +78,8 @@ impl FileLexer {
         return Some(Ok(()));
     }
 
-    pub fn lex_file(path: PathBuf) -> super::PResult<FileLexer> {
-        let file = File::open(path).map_err(|e| Error {
-            pos: Origin::Module("lexer".into()),
-            error: Box::new(FileError(e)),
-        })?;
+    pub fn lex_file(path: PathBuf) -> Result<FileLexer> {
+        let file = File::open(path).map_err(|e| FileError(e).sign())?;
 
         Ok(FileLexer {
             file: BufReader::new(file),
@@ -74,7 +90,7 @@ impl FileLexer {
 }
 
 impl Iterator for FileLexer {
-    type Item = super::PResult<Token>;
+    type Item = Result<Token>;
 
     fn next(&mut self) -> Option<Self::Item> {
         while self.current_line_tokens.is_empty() {

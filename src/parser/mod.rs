@@ -3,7 +3,7 @@ pub mod parser;
 
 use std::fmt::Display;
 
-use crate::error_handling::{Error, ErrorType, FilePosition, Origin};
+use crate::error_handling::ErrorType;
 
 use lexer::RawToken;
 
@@ -33,11 +33,13 @@ pub enum ParseErrorType {
     MisplacedNot,
     MultipleTargets,
     UnexpectedToken(RawToken),
-
-    FileError(std::io::Error),
 }
 
-impl ErrorType for ParseErrorType {}
+impl ErrorType for ParseErrorType {
+    fn module(&self) -> String {
+        String::from("parser")
+    }
+}
 
 impl Display for ParseErrorType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -85,26 +87,6 @@ impl Display for ParseErrorType {
             Self::MisplacedNot => write!(f, "There is no matcher for this not to be applied to"),
             Self::MultipleTargets => write!(f, "There are multiple targets in the environment"),
             Self::UnexpectedToken(token) => write!(f, "Unexpected token {:?}", token),
-
-            Self::FileError(e) => write!(f, "File error: {}", e),
         }
     }
 }
-
-impl ParseErrorType {
-    fn at(self, pos: FilePosition) -> Error {
-        Error {
-            pos: Origin::File(pos),
-            error: Box::new(self),
-        }
-    }
-}
-
-impl PartialEq for ParseErrorType {
-    fn eq(&self, other: &Self) -> bool {
-        std::mem::discriminant(self) == std::mem::discriminant(other)
-    }
-}
-
-pub type PResult<T> = std::result::Result<T, Error>;
-pub type PResultV<T> = std::result::Result<T, Vec<Error>>;

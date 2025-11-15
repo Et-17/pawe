@@ -3,29 +3,54 @@ use std::collections::{HashMap, VecDeque};
 use crate::config::{Label, LabelEncoding};
 use crate::evolution::Rule;
 
-use super::errors::{EResult, EvolutionErrorType::*};
+use crate::error_handling::{ErrorType, Result};
 
 pub type Route = Vec<Label>;
 type Languages = LabelEncoding;
 type Evolutions = HashMap<Label, HashMap<Label, Vec<Rule>>>;
+
+#[derive(Debug)]
+pub enum RoutingErrorType {
+    UndefinedLanguage(String),
+    NoConnection(Label, Label),
+}
+
+impl ErrorType for RoutingErrorType {
+    fn module(&self) -> String {
+        String::from("router")
+    }
+}
+
+impl std::fmt::Display for RoutingErrorType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UndefinedLanguage(lang) => write!(f, "Could not find language `{lang}`"),
+            Self::NoConnection(a, b) => {
+                write!(f, "Could not find a connection from `{a}` to `{b}`")
+            }
+        }
+    }
+}
+
+use RoutingErrorType::*;
 
 pub fn find_route(
     start_name: String,
     end_name: String,
     languages: &Languages,
     evolutions: &Evolutions,
-) -> EResult<Route> {
+) -> Result<Route> {
     let start = languages
         .encode(&start_name)
-        .ok_or_else(|| UndefinedLanguage(start_name).by("router"))?;
+        .ok_or_else(|| UndefinedLanguage(start_name).sign())?;
     let end = languages
         .encode(&end_name)
-        .ok_or_else(|| UndefinedLanguage(end_name).by("router"))?;
+        .ok_or_else(|| UndefinedLanguage(end_name).sign())?;
 
     search(&start, &end, evolutions)
 }
 
-fn search(start: &Label, end: &Label, evolutions: &Evolutions) -> EResult<Route> {
+fn search(start: &Label, end: &Label, evolutions: &Evolutions) -> Result<Route> {
     let mut frontier = VecDeque::new();
     let mut visited = HashMap::new();
     let mut last = None;
@@ -33,7 +58,7 @@ fn search(start: &Label, end: &Label, evolutions: &Evolutions) -> EResult<Route>
 
     loop {
         let Some(next_lang) = frontier.pop_front() else {
-            return Err(NoConnection(start.clone(), end.clone()).by("router"));
+            return Err(NoConnection(start.clone(), end.clone()).sign());
         };
 
         if visited.contains_key(next_lang) {
@@ -58,7 +83,7 @@ fn unwind_search_map(
     map: &HashMap<&Label, Option<&Label>>,
     start: &Label,
     end: &Label,
-) -> EResult<Route> {
+) -> Result<Route> {
     let mut route = vec![end];
 
     while let Some(last_lang) = route.last() {
@@ -69,7 +94,7 @@ fn unwind_search_map(
     }
 
     if route.first().is_none_or(|&r_end| r_end != end) {
-        Err(NoConnection(start.clone(), end.clone()).by("router"))
+        Err(NoConnection(start.clone(), end.clone()).sign())
     } else {
         route.reverse();
         Ok(route.into_iter().cloned().collect())
