@@ -36,6 +36,7 @@ pub enum EnvironmentAtom {
     Phoneme(Phoneme),
     Optional(Box<EnvironmentAtom>),
     ZeroOrMore(Box<EnvironmentAtom>),
+    Not(Box<EnvironmentAtom>),
 }
 
 impl std::fmt::Debug for EnvironmentAtom {
@@ -45,6 +46,7 @@ impl std::fmt::Debug for EnvironmentAtom {
             EnvironmentAtom::Phoneme(phoneme) => phoneme.fmt(f),
             EnvironmentAtom::Optional(atom) => write!(f, "{:?}?", atom),
             EnvironmentAtom::ZeroOrMore(atom) => write!(f, "{:?}*", atom),
+            EnvironmentAtom::Not(atom) => write!(f, "{:?}!", atom),
         }
     }
 }
@@ -214,7 +216,7 @@ pub fn match_environment(word: &[Phoneme], env: &[EnvironmentAtom], start: usize
     let mut env_iter = env.iter();
 
     while let Some(atom) = env_iter.next() {
-        end += match_environment_atom(atom, &mut word_iter)?;
+        end += match_environment_atom(atom, &mut word_iter, false)?;
     }
 
     Some(end)
@@ -225,17 +227,19 @@ pub fn match_environment(word: &[Phoneme], env: &[EnvironmentAtom], start: usize
 fn match_environment_atom<'a>(
     matcher: &EnvironmentAtom,
     word: &mut Peekable<impl Iterator<Item = &'a Phoneme>>,
+    invert: bool,
 ) -> Option<usize> {
     match matcher {
-        EnvironmentAtom::Optional(atom) => Some(match_environment_atom(&atom, word).unwrap_or(0)),
-        EnvironmentAtom::ZeroOrMore(atom) => match_environment_atom(&atom, word)
-            .map(|c| c + match_environment_atom(matcher, word).unwrap_or(0)),
         EnvironmentAtom::Filter(filter) => word
-            .peeking_next(|w_phoneme| filter.matches(w_phoneme))
+            .peeking_next(|w_phoneme| filter.matches(w_phoneme) ^ invert)
             .map(|_| 1),
         EnvironmentAtom::Phoneme(phoneme) => word
-            .peeking_next(|w_phoneme| phoneme.matches(w_phoneme))
+            .peeking_next(|w_phoneme| phoneme.matches(w_phoneme) ^ invert)
             .map(|_| 1),
+        EnvironmentAtom::Optional(atom) => match_environment_atom(&atom, word, invert).or(Some(1)),
+        EnvironmentAtom::ZeroOrMore(atom) => match_environment_atom(&atom, word, invert)
+            .map(|c| c + match_environment_atom(matcher, word, invert).unwrap_or(0)),
+        EnvironmentAtom::Not(atom) => match_environment_atom(&atom, word, !invert),
     }
 }
 

@@ -22,7 +22,8 @@ fn test() -> Result<(), Vec<Error<impl ErrorType>>> {
 
     println!("Config: {config:#?}");
 
-    let mut word: Vec<_> = vec!["l", "ó", "w", "k", "s", "n", "e", "h₂"]
+    // let mut word: Vec<_> = vec!["l", "ó", "w", "k", "s", "n", "e", "h₂"]
+    let mut word: Vec<_> = vec!["t", "r", "é", "y", "e", "s"]
         .into_iter()
         .map(|c| config.characters.get(c).unwrap().clone())
         .map(|c| c.into())
@@ -34,15 +35,22 @@ fn test() -> Result<(), Vec<Error<impl ErrorType>>> {
     }
     println!();
 
-    for (start_lang, evos) in config.evolutions {
-        for (end_lang, rules) in evos {
-            println!("Evolving from {start_lang} to {end_lang}");
+    let testing_steps = vec![
+        ("ProtoIndoEuropean", "PreProtoGermanic"),
+        ("PreProtoGermanic", "EarlyProtoGermanic"),
+        ("EarlyProtoGermanic", "LateProtoGermanic"),
+    ];
 
-            for rule in rules {
-                word = do_rule(word, &rule, &config.characters);
-                word.iter().for_each(|c| print!("{:?}", c));
-                println!();
-            }
+    for (lang_a_name, lang_b_name) in testing_steps {
+        println!("Evolving from {lang_a_name} to {lang_b_name}");
+        let lang_a = &config.languages.encode(&lang_a_name.into()).unwrap();
+        let lang_b = &config.languages.encode(&lang_b_name.into()).unwrap();
+        let rules = config.evolutions.get(lang_a).unwrap().get(lang_b).unwrap();
+
+        for rule in rules {
+            word = do_rule(word, &rule, &config.characters);
+            word.iter().for_each(|c| print!("{:?}", c));
+            println!();
         }
     }
 

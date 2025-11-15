@@ -30,6 +30,7 @@ pub enum ParseErrorType {
     MisplacedWordBoundary,
     MisplacedOptional,
     MisplacedZeroOrMore,
+    MisplacedNot,
     MultipleTargets,
     UnexpectedToken(RawToken),
 
@@ -81,6 +82,7 @@ impl Display for ParseErrorType {
                 f,
                 "There is no matcher for this zero-or-more to be applied to"
             ),
+            Self::MisplacedNot => write!(f, "There is no matcher for this not to be applied to"),
             Self::MultipleTargets => write!(f, "There are multiple targets in the environment"),
             Self::UnexpectedToken(token) => write!(f, "Unexpected token {:?}", token),
 

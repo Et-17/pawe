@@ -371,6 +371,14 @@ fn parse_evolution_environment(
                     errors.push(MisplacedZeroOrMore.at(token.pos));
                 }
             }
+            RawToken::Not => {
+                if !pre_environment.is_empty() {
+                    let new_atom = EnvironmentAtom::Not(Box::new(pre_environment.pop().unwrap()));
+                    pre_environment.push(new_atom);
+                } else {
+                    errors.push(MisplacedNot.at(token.pos));
+                }
+            }
             RawToken::WordBoundry => {
                 if first {
                     match_word_start = true;
@@ -427,6 +435,15 @@ fn parse_evolution_environment(
                     post_environment.push(new_atom);
                 } else {
                     errors.push(MisplacedZeroOrMore.at(token.pos));
+                }
+            }
+            RawToken::Not => {
+                if !post_environment.is_empty() {
+                    let new_atom =
+                        EnvironmentAtom::ZeroOrMore(Box::new(post_environment.pop().unwrap()));
+                    post_environment.push(new_atom);
+                } else {
+                    errors.push(MisplacedNot.at(token.pos));
                 }
             }
             RawToken::WordBoundry => match_word_end_pos = Some(token.pos),

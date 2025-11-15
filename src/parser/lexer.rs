@@ -105,6 +105,7 @@ pub enum RawToken {
     WordBoundry, // #
     Optional,    // ?
     ZeroOrMore,  // *
+    Not,         // !
     EOL,         // ;
     Comment,     // //
 
@@ -159,7 +160,7 @@ impl MarkedChar {
     }
 }
 
-const FORBIDDEN_IDENTIFIER_CHARACTERS: &str = "{}()[]/>*?;";
+const FORBIDDEN_IDENTIFIER_CHARACTERS: &str = "{}()[]/>*?!;";
 
 fn intra_identifier_character(c: char) -> bool {
     !c.is_whitespace() && FORBIDDEN_IDENTIFIER_CHARACTERS.chars().all(|fc| fc != c)
@@ -235,6 +236,7 @@ fn lex_token<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> Option<T
             '#' => RawToken::WordBoundry,
             '?' => RawToken::Optional,
             '*' => RawToken::ZeroOrMore,
+            '!' => RawToken::Not,
             ';' => RawToken::EOL,
 
             '{' => RawToken::BlockOpen,

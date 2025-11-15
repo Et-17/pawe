@@ -4,6 +4,7 @@ languages {
     ProtoIndoEuropean;
     PreProtoGermanic;
 	EarlyProtoGermanic;
+	LateProtoGermanic;
 }
 
 // Establish some basic distinctions
@@ -16,6 +17,7 @@ parameters {
 features {
     syllabic;
     stressed; // we will only mark nuclei as stressed
+	preserve; // this is for preventing rule application if needes, but ensure it's turned off when you're done
 }
 
 // Establish necessary information for consonants
@@ -78,48 +80,76 @@ parameters {
 
 features {
     rounded;
+	nasalized;
 }
 
 characters {
-	V [+type.vowel -rounded +syllabic +length.short -stressed];
+	V [+type.vowel -rounded +syllabic +length.short -stressed -nasalized];
 
 	a [V +height.open +backness.central];
+	ą [a +nasalized];
 	á [a +stressed];
 	ā [a +length.long];
+	ą̄ [ā +nasalized];
 	ā́ [a +length.long +stressed];
 	â [a +length.overlong];
+	ą̂ [â +nasalized];
 
 	ɑ [V +height.open +backness.back];
+	ɑ̨ [ɑ +nasalized];
 	ɑ́ [ɑ +stressed];
 	ɑ̄ [ɑ +length.long];
+	ɑ̨̄ [ɑ̄ +nasalized];
 	ɑ̄́ [ɑ +length.long +stressed];
 	ɑ̂ [ɑ +length.overlong];
+	ɑ̨̂ [ɑ̂ +nasalized];
 
 	i [V +height.close +backness.front];
+	į [i +nasalized];
 	í [i +stressed];
 	ī [i +length.long];
+	į̄ [ī +nasalized];
 	ī́ [i +length.long +stressed];
 	î [i +length.overlong];
+	į̂ [î +nasalized];
 	ĭ [i -syllabic];
 
 	u [V +height.close +backness.back +rounded];
+	ų [u +nasalized];
 	ú [u +stressed];
 	ū [u +length.long];
+	ų̄ [ū +nasalized];
 	ū́ [u +length.long +stressed];
 	û [u +length.overlong];
+	ų̂ [û +nasalized];
 	ŭ [u -syllabic];
 
 	e [V +height.close_mid +backness.front];
+	ę [e +nasalized];
 	é [e +stressed];
 	ē [e +length.long];
+	ę̄ [ē +nasalized];
 	ḗ [e +length.long +stressed];
 	ê [e +length.overlong];
+	ę̂ [ê +nasalized];
 
 	o [V +height.close_mid +backness.back +rounded];
+	ǫ [o +nasalized];
 	ó [o +stressed];
 	ō [o +length.long];
+	ǭ [ō +nasalized];
 	ṓ [o +length.long +stressed];
 	ô [o +length.overlong];
+	ǫ̂ [ô +nasalized];
+
+	ɔ [V +height.open_mid +backness.back +rounded];
+	ɔ̨ [ɔ +nasalized];
+	ɔ́ [ɔ +stressed];
+	ɔ̄ [ɔ +length.long];
+	ɔ̨̄ [ɔ̄ +nasalized];
+	ɔ̄́ [ɔ +length.long +stressed];
+	ɔ̂ [ɔ +length.overlong];
+	ɔ̨̂ [ɔ̂ +nasalized];
 
 	ə [V +height.mid +backness.central];
 }
@@ -209,8 +239,8 @@ evolve PreProtoGermanic to EarlyProtoGermanic {
 	e > o / _ w #;
 
 	// Unstressed /e/ > /i/ except before /r/
-	e > i;
-	e y > [i +length.long];
+	e y > [i +length.long] / _ r!;
+	e > i / _ r!;
 
 	// Unstressed /ji/ > /i/
 	i y i > [i +length.overlong];
@@ -221,8 +251,58 @@ evolve PreProtoGermanic to EarlyProtoGermanic {
 	1(+height.open +backness.central) > [1 +backness.back];
 
 	// Reanalyze /Vw/ and /Vj/ as /Vu/ and /Vi/
-	w > [u -syllabic] / (+syllabic) _ (-syllabic);
-	w > [u -syllabic] / (+syllabic) _ #;
-	y > [i -syllabic] / (+syllabic) _ (-syllabic);
-	y > [i -syllabic] / (+syllabic) _ #;
+	// w > [u -syllabic] / (+syllabic) _ (-syllabic);
+	// w > [u -syllabic] / (+syllabic) _ #;
+	// y > [i -syllabic] / (+syllabic) _ (-syllabic);
+	// y > [i -syllabic] / (+syllabic) _ #;
+}
+
+evolve EarlyProtoGermanic to LateProtoGermanic {
+	// /m/ > /n/ before dental consonants and word finally
+	m > n / _ #;
+	m > n / _ (+place.dental);
+
+	// Word-final /n/ is lost after unstressed syllables, causing nasalization
+	1(+type.vowel -stressed) n > [1 +nasalized] / _ #;
+
+	// Nasal /ẽː/ is lowered to /ɑ̃ː/
+	ę̄ > ɑ̨̄;
+
+	// Elimination of /ə/
+	ə > / (+type.consonant) _ (+type.consonant);
+	ə > ɑ;
+
+	// Assimilation of sonorants
+	w > n / n _;
+	n > l / l _;
+	z > m / _ m;
+
+	// Loss of word-final /t/ after unstressed syllables
+	t > / (+syllabic -stressed) (-syllabic)* _ #;
+
+	// /ɣʷ/ > /w/
+	[ɣ +labialized] > w;
+
+	// Long a is raised
+	1(ɑ -length.short) > [1 +height.open_mid +backness.back +rounded];
+
+	// Early i-mutation
+	1(+height.close_mid +backness.front +length.short) y > [1 +height.close +length.long];
+	e > i / _ (-syllabic)* i;
+	e > i / _ (-syllabic -manner.approximant)* y;
+
+	// /e/ > /i/ when followed by a syllable-final nasal
+	e > i / _ (+manner.nasal);
+
+	// /j/ is lost between vowels except after /i/ and /w/
+	y > [y +preserve] / i _;
+	y > [y +preserve] / w _;
+	y > / (+type.vowel) _ (+type.vowel);
+	1(+preserve) > [1 -preserve];
+	
+
+	// /n/ is lost before /x/, causing compensatory lengthening and nasalization
+	// of the preceeding vowel
+	1(+type.vowel) > [1 +length.long +nasalized] / _ (-syllabic)* n h;
+	n > / _ h;
 }
