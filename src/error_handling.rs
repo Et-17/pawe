@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display};
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct FilePosition {
     pub line: usize,
     pub char: usize,
@@ -9,12 +9,6 @@ pub struct FilePosition {
 impl Display for FilePosition {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}:{}", self.line, self.char)
-    }
-}
-
-impl Debug for FilePosition {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[{}]", self)
     }
 }
 

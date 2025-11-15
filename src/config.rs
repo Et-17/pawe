@@ -3,7 +3,7 @@ use itertools::Itertools;
 use crate::evolution::Rule;
 use crate::phonemes::Phoneme;
 use std::collections::HashMap;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::rc::Rc;
 
 type LabelCode = u16;
@@ -179,7 +179,7 @@ impl Debug for ParameterEncoding {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct CharacterDefinition {
     pub symbol: String,
     pub phoneme: Phoneme,
@@ -191,7 +191,7 @@ impl CharacterDefinition {
     }
 }
 
-impl Debug for CharacterDefinition {
+impl Display for CharacterDefinition {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.symbol)
     }

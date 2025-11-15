@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 
 use itertools::Itertools;
 
@@ -7,7 +7,7 @@ use crate::config::{Character, Label};
 
 pub type SelectorCode = u8;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Attribute {
     Feature(bool, Label),
     Parameter(bool, Label, Label),
@@ -33,7 +33,7 @@ impl Attribute {
     }
 }
 
-impl Debug for Attribute {
+impl Display for Attribute {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Attribute::Feature(mark, label) => write!(f, "{}{}", mark_char(*mark), label),
@@ -42,12 +42,12 @@ impl Debug for Attribute {
             }
             Attribute::Character(definition) => write!(f, "{}", definition.symbol),
             Attribute::Selection(code) => write!(f, "{}", code),
-            Attribute::BoundPhoneme(phoneme) => write!(f, "{:?}", phoneme),
+            Attribute::BoundPhoneme(phoneme) => write!(f, "{}", phoneme),
         }
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Phoneme {
     pub features: HashMap<Label, bool>,
     pub parameters: HashMap<Label, Label>,
@@ -221,7 +221,7 @@ impl FromIterator<Attribute> for Phoneme {
     }
 }
 
-impl Debug for Phoneme {
+impl Display for Phoneme {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let attrs = self.attr_display();
         if attrs.len() == 0 {
@@ -229,24 +229,15 @@ impl Debug for Phoneme {
         }
         if attrs.len() == 1 {
             if let Attribute::Character(character) = &attrs[0] {
-                return write!(f, "{:?}", character);
+                return write!(f, "{}", character);
             }
         }
 
-        write!(f, "[")?;
-        let mut attrs_iter = attrs.iter();
-        attrs_iter
-            .next()
-            .map(|attr| write!(f, "{:?}", attr))
-            .transpose()?;
-        for attr in attrs_iter {
-            write!(f, " {:?}", attr)?;
-        }
-        write!(f, "]")
+        write!(f, "[{}]", attrs.iter().join(" "))
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct UnboundPhoneme {
     pub attributes: Vec<Attribute>,
 }
@@ -273,29 +264,31 @@ impl FromIterator<Attribute> for UnboundPhoneme {
     }
 }
 
-impl Debug for UnboundPhoneme {
+impl Display for UnboundPhoneme {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let attributes_strs = self
             .attributes
             .iter()
-            .map(|attr| format!("{:?}", attr))
+            .map(|attr| format!("{}", attr))
             .join(" ");
 
         write!(f, "[{}]", attributes_strs)
     }
 }
 
+#[derive(Debug)]
 pub struct Selector {
     pub code: SelectorCode,
     pub filter: Filter,
 }
 
-impl Debug for Selector {
+impl Display for Selector {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}{:?}", self.code, self.filter)
+        write!(f, "{}{}", self.code, self.filter)
     }
 }
 
+#[derive(Debug)]
 pub struct Filter {
     pub features: HashMap<Label, bool>,
     pub parameters: HashMap<Label, (bool, Label)>,
@@ -357,7 +350,7 @@ impl FromIterator<Attribute> for Filter {
     }
 }
 
-impl Debug for Filter {
+impl Display for Filter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let features_strs = self
             .features

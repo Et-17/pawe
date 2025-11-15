@@ -1,12 +1,14 @@
-use itertools::PeekingNext;
+use itertools::{Itertools, PeekingNext};
 
 use crate::config::Character;
 use crate::phonemes::{Filter, Phoneme, Selector, SelectorCode, UnboundPhoneme};
 use std::collections::HashMap;
+use std::fmt::{Debug, Display};
 use std::iter::Peekable;
 
 pub mod routing;
 
+#[derive(Debug)]
 pub enum InputAtom {
     Selector(Selector),
     Filter(Filter),
@@ -23,16 +25,17 @@ impl InputAtom {
     }
 }
 
-impl std::fmt::Debug for InputAtom {
+impl Display for InputAtom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            InputAtom::Selector(selector) => selector.fmt(f),
-            InputAtom::Filter(filter) => filter.fmt(f),
-            InputAtom::Phoneme(phoneme) => phoneme.fmt(f),
+            InputAtom::Selector(selector) => Display::fmt(selector, f),
+            InputAtom::Filter(filter) => Display::fmt(filter, f),
+            InputAtom::Phoneme(phoneme) => Display::fmt(phoneme, f),
         }
     }
 }
 
+#[derive(Debug)]
 pub enum EnvironmentAtom {
     Filter(Filter),
     Phoneme(Phoneme),
@@ -41,18 +44,19 @@ pub enum EnvironmentAtom {
     Not(Box<EnvironmentAtom>),
 }
 
-impl std::fmt::Debug for EnvironmentAtom {
+impl Display for EnvironmentAtom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            EnvironmentAtom::Filter(filter) => filter.fmt(f),
-            EnvironmentAtom::Phoneme(phoneme) => phoneme.fmt(f),
-            EnvironmentAtom::Optional(atom) => write!(f, "{:?}?", atom),
-            EnvironmentAtom::ZeroOrMore(atom) => write!(f, "{:?}*", atom),
-            EnvironmentAtom::Not(atom) => write!(f, "{:?}!", atom),
+            EnvironmentAtom::Filter(filter) => write!(f, "{filter}"),
+            EnvironmentAtom::Phoneme(phoneme) => write!(f, "{phoneme}"),
+            EnvironmentAtom::Optional(atom) => write!(f, "{atom}?"),
+            EnvironmentAtom::ZeroOrMore(atom) => write!(f, "{atom}*"),
+            EnvironmentAtom::Not(atom) => write!(f, "{atom}!"),
         }
     }
 }
 
+#[derive(Debug)]
 pub struct Environment {
     pub match_word_start: bool,
     pub match_word_end: bool,
@@ -60,18 +64,18 @@ pub struct Environment {
     pub post_environment: Vec<EnvironmentAtom>,
 }
 
-impl std::fmt::Debug for Environment {
+impl Display for Environment {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.match_word_start {
             write!(f, "# ")?;
         }
 
         for atom in &self.pre_environment {
-            write!(f, "{:?} ", atom)?;
+            write!(f, "{atom} ")?;
         }
         write!(f, "_")?;
         for atom in &self.post_environment {
-            write!(f, " {:?}", atom)?;
+            write!(f, " {atom}")?;
         }
 
         if self.match_word_end {
@@ -81,24 +85,25 @@ impl std::fmt::Debug for Environment {
     }
 }
 
+#[derive(Debug)]
 pub struct Rule {
     pub input: Vec<InputAtom>,
     pub output: Vec<UnboundPhoneme>,
     pub environment: Option<Environment>,
 }
 
-impl std::fmt::Debug for Rule {
+impl Display for Rule {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for atom in &self.input {
-            write!(f, "{:?} ", atom)?;
+            write!(f, "{} ", atom)?;
         }
         write!(f, ">")?;
         for atom in &self.output {
-            write!(f, " {:?}", atom)?;
+            write!(f, " {}", atom)?;
         }
 
         if let Some(env) = &self.environment {
-            write!(f, " / {:?}", env)?;
+            write!(f, " / {}", env)?;
         }
 
         Ok(())

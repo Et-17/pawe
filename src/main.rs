@@ -30,11 +30,7 @@ fn test() -> Result<(), Vec<Error>> {
         .collect();
 
     println!("Configured word:");
-    print!("    ");
-    for c in &word {
-        print!("{c:?}");
-    }
-    println!();
+    println!("    {}", word.iter().join(""));
     println!();
 
     let route = evolution::routing::find_route(
@@ -56,10 +52,8 @@ fn test() -> Result<(), Vec<Error>> {
         let rules = config.evolutions.get(start).unwrap().get(end).unwrap();
 
         for rule in rules {
-            print!("    ");
             word = do_rule(word, &rule, &config.characters);
-            word.iter().for_each(|c| print!("{c:?}"));
-            println!();
+            println!("    {}", word.iter().join(""));
         }
     }
 
