@@ -9,8 +9,10 @@ use std::{
 
 use itertools::{Itertools, PeekingNext};
 
-use crate::error_handling::{Error, Position};
+use crate::error_handling::{Error, FilePosition, Origin};
 use crate::phonemes::SelectorCode;
+
+use super::ParseErrorType::FileError;
 
 pub struct FileLexer {
     file: BufReader<File>,
@@ -26,13 +28,10 @@ impl FileLexer {
         if let Ok(0) = read_amount {
             return None;
         } else if let Err(e) = read_amount {
-            return Some(Err(Error {
-                pos: Position {
-                    line: self.line_num + 1,
-                    char: 0,
-                },
-                error: super::ParseErrorType::FileError(e),
-            }));
+            return Some(Err(FileError(e).at(FilePosition {
+                line: self.line_num + 1,
+                char: 0,
+            })));
         }
 
         self.line_num += 1;
@@ -62,8 +61,8 @@ impl FileLexer {
 
     pub fn lex_file(path: PathBuf) -> super::PResult<FileLexer> {
         let file = File::open(path).map_err(|e| Error {
-            pos: Position { line: 0, char: 0 },
-            error: super::ParseErrorType::FileError(e),
+            pos: Origin::Module("lexer".into()),
+            error: Box::new(FileError(e)),
         })?;
 
         Ok(FileLexer {
@@ -127,13 +126,13 @@ pub enum RawToken {
     UnknownCharacter(char),
 }
 
-fn mark_token(token: RawToken, pos: Position) -> Token {
+fn mark_token(token: RawToken, pos: FilePosition) -> Token {
     Token { token, pos }
 }
 
 pub struct Token {
     pub token: RawToken,
-    pub pos: Position,
+    pub pos: FilePosition,
 }
 
 impl Debug for Token {
@@ -146,7 +145,7 @@ impl Debug for Token {
 // the file it occurs
 struct MarkedChar {
     grapheme: char,
-    pos: Position,
+    pos: FilePosition,
 }
 
 impl MarkedChar {
@@ -155,7 +154,7 @@ impl MarkedChar {
     fn from_enumerated_grapheme(line: usize) -> impl Fn((usize, char)) -> MarkedChar {
         move |(i, grapheme): (usize, char)| MarkedChar {
             grapheme,
-            pos: Position { line, char: i + 1 },
+            pos: FilePosition { line, char: i + 1 },
         }
     }
 }

@@ -5,6 +5,9 @@ use crate::phonemes::{Filter, Phoneme, Selector, SelectorCode, UnboundPhoneme};
 use std::collections::HashMap;
 use std::iter::Peekable;
 
+mod errors;
+pub mod routing;
+
 pub enum InputAtom {
     Selector(Selector),
     Filter(Filter),

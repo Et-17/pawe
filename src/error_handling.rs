@@ -1,33 +1,48 @@
 use std::fmt::{Debug, Display};
 
-pub trait ErrorType: Display + PartialEq {}
+pub trait ErrorType: Display {}
 
 // 0:0 means that the error doesn't have a specific location
 #[derive(Copy, Clone, PartialEq)]
-pub struct Position {
+pub struct FilePosition {
     pub line: usize,
     pub char: usize,
 }
 
-impl Display for Position {
+impl Display for FilePosition {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}:{}", self.line, self.char)
     }
 }
 
-impl Debug for Position {
+impl Debug for FilePosition {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self)
     }
 }
 
-#[derive(PartialEq)]
-pub struct Error<T: ErrorType> {
-    pub pos: Position,
-    pub error: T,
+#[derive(Clone, PartialEq)]
+pub enum Origin {
+    File(FilePosition),
+    Module(String),
 }
 
-impl<T: ErrorType> Display for Error<T> {
+impl Display for Origin {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::File(fp) => write!(f, "{fp}"),
+            Self::Module(module) => write!(f, "{module}"),
+        }
+    }
+}
+
+// #[derive(PartialEq)]
+pub struct Error {
+    pub pos: Origin,
+    pub error: Box<dyn ErrorType>,
+}
+
+impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -37,7 +52,7 @@ impl<T: ErrorType> Display for Error<T> {
     }
 }
 
-impl<T: ErrorType> Debug for Error<T> {
+impl Debug for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self)
     }
@@ -45,8 +60,8 @@ impl<T: ErrorType> Debug for Error<T> {
 
 // This lets us use ? when we want to fully fail on single errors in a function
 // that returns a vector of errors, especially in parsing
-impl<T: ErrorType> From<Error<T>> for Vec<Error<T>> {
-    fn from(value: Error<T>) -> Self {
+impl From<Error> for Vec<Error> {
+    fn from(value: Error) -> Self {
         let mut errors = Vec::with_capacity(1);
         errors.push(value);
         return errors;
