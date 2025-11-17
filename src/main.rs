@@ -4,6 +4,7 @@ use crate::error_handling::Error;
 use crate::evolution::do_rule;
 use crate::parser::lexer::FileLexer;
 
+mod cli;
 mod config;
 mod error_handling;
 mod evolution;
@@ -11,11 +12,12 @@ mod parser;
 mod phonemes;
 
 fn main() -> () {
-    if let Err(errs) = test() {
-        for err in errs {
-            println!("{}", err);
-        }
-    }
+    // if let Err(errs) = test() {
+    //     for err in errs {
+    //         println!("{}", err);
+    //     }
+    // }
+    cli::do_cli();
 }
 
 fn test() -> Result<(), Vec<Error>> {

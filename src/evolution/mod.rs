@@ -1,4 +1,4 @@
-use itertools::{Itertools, PeekingNext};
+use itertools::PeekingNext;
 
 use crate::config::Character;
 use crate::phonemes::{Filter, Phoneme, Selector, SelectorCode, UnboundPhoneme};
