@@ -55,6 +55,10 @@ pub struct EvolveArgs {
     /// change the word
     #[arg(long, requires = "show_rules")]
     pub all_rules: bool,
+
+    /// Don't label the different stages
+    #[arg(long)]
+    pub no_labels: bool,
 }
 
 #[derive(ValueEnum, Debug, Clone)]

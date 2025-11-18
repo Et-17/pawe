@@ -113,34 +113,40 @@ impl Display for Rule {
 // This scans through the word trying to apply the rule, and if it applies it
 // successfully, it will continue to scan through the new word.
 pub fn do_rule<'a>(
-    word: Vec<Phoneme>,
+    word: &[Phoneme],
     rule: &Rule,
     character_table: &HashMap<String, Character>,
-) -> Vec<Phoneme> {
-    _do_rule(word, rule, character_table, 0)
+) -> Option<Vec<Phoneme>> {
+    _do_rule(&word, rule, character_table, 0)
 }
 
 fn _do_rule<'a>(
-    word: Vec<Phoneme>,
+    // word: Vec<Phoneme>,
+    word: &[Phoneme],
     rule: &Rule,
     character_table: &HashMap<String, Character>,
     start: usize,
-) -> Vec<Phoneme> {
+) -> Option<Vec<Phoneme>> {
     // If we reach the end of the word, stop
     if start >= word.len() {
-        return word;
+        return None;
     }
 
     // If we are no longer at the beginning, but the rule says to only be
     // applied at the beginning, stop
     if let Some(env) = &rule.environment {
         if env.match_word_start && start > 0 {
-            return word;
+            return None;
         }
     }
 
-    let new_word = do_rule_from_pos(&word, rule, character_table, start).unwrap_or(word);
-    _do_rule(new_word, rule, character_table, start + 1)
+    match do_rule_from_pos(&word, rule, character_table, start) {
+        Some(new_word) => match _do_rule(&new_word, rule, character_table, start + 1) {
+            Some(new_word2) => Some(new_word2),
+            None => Some(new_word),
+        },
+        None => _do_rule(word, rule, character_table, start + 1),
+    }
 }
 
 // Tries to match the rule beginning at start. This will match word end

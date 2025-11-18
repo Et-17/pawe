@@ -36,6 +36,11 @@ fn evolve(args: EvolveArgs, config_path: PathBuf) -> ResultV<()> {
     let mut config = parse_config_file(config_path)?;
     let mut word = parse_word(&args.word, &mut config)?;
 
+    let indent = match args.no_labels {
+        true => "",
+        false => "    ",
+    };
+
     let route = find_route(
         args.start.clone(),
         args.end.clone(),
@@ -45,12 +50,14 @@ fn evolve(args: EvolveArgs, config_path: PathBuf) -> ResultV<()> {
     let route_pairs = route.iter().tuple_windows();
 
     if !args.no_stages {
-        println!("{}", args.start);
-        println!("    {}", word.iter().join(""));
+        if !args.no_labels {
+            println!("{}", args.start);
+        }
+        println!("{indent}{}", word.iter().join(""));
     }
 
     for (start, end) in route_pairs {
-        word = do_evolution_step(word, start, end, &args, &config);
+        word = do_evolution_step(word, start, end, indent, &args, &config);
     }
 
     if args.no_stages {
@@ -64,26 +71,33 @@ fn do_evolution_step(
     mut word: Vec<Phoneme>,
     start: &Label,
     end: &Label,
+    ident: &str,
     args: &EvolveArgs,
     config: &Config,
 ) -> Vec<Phoneme> {
-    if args.show_rules {
+    if args.show_rules && !args.no_labels {
         println!("Evolving from {start} to {end}");
-    } else if !args.no_stages {
+    } else if !args.no_stages && !args.no_labels {
         println!("{end}");
     }
 
     let rules = config.evolutions.get(start).unwrap().get(end).unwrap();
 
     for rule in rules {
-        word = do_rule(word, &rule, &config.characters);
-        if args.show_rules {
-            println!("    {}", word.iter().join(""));
+        if let Some(new_word) = do_rule(&word, &rule, &config.characters) {
+            word = new_word;
+            if args.show_rules {
+                println!("{ident}{}", word.iter().join(""));
+            }
+        } else {
+            if args.all_rules {
+                println!("{ident}{}", word.iter().join(""));
+            }
         }
     }
 
     if !args.show_rules && !args.no_stages {
-        println!("    {}", word.iter().join(""));
+        println!("{ident}{}", word.iter().join(""));
     }
 
     word
