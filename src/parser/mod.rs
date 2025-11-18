@@ -9,10 +9,46 @@ use crate::evolution::{Environment, EnvironmentAtom, InputAtom, Rule};
 use crate::phonemes::{Attribute, Filter, Phoneme, Selector, SelectorCode, UnboundPhoneme};
 
 use errors::ParseErrorType::*;
-use lexer::{FileLexer, RawToken, Token};
+use lexer::{Lexer, LexerErrorType, RawToken, Token};
 
-pub fn parse_config_file(file: &mut FileLexer) -> ResultV<Config> {
-    file.process_results(|mut tokens| parse_config(&mut tokens))?
+pub fn parse_config_file(path: std::path::PathBuf) -> ResultV<Config> {
+    let file = std::fs::File::open(path).map_err(|e| LexerErrorType::IOError(e).sign())?;
+
+    Lexer::lex(std::io::BufReader::new(file))
+        .process_results(|mut tokens| parse_config(&mut tokens))?
+}
+
+pub fn parse_word(word: &str, config: &mut Config) -> ResultV<Vec<Phoneme>> {
+    Lexer::lex(std::io::Cursor::new(word))
+        .process_results(|mut tokens| parse_unwrapped_word(&mut tokens, config))?
+}
+
+fn parse_unwrapped_word(
+    word: &mut impl Iterator<Item = Token>,
+    config: &mut Config,
+) -> ResultV<Vec<Phoneme>> {
+    let mut errors = Vec::new();
+
+    let mut phonemes = Vec::new();
+
+    while let Some(token) = word.next() {
+        match token.token {
+            RawToken::PhonemeOpen => match parse_phoneme(word, config) {
+                Ok(phoneme) => phonemes.push(phoneme),
+                Err(mut errs) => errors.append(&mut errs),
+            },
+            RawToken::UnmarkedIdentifier(ident) => {
+                match parse_character(config, ident, token.pos) {
+                    Ok(Attribute::Character(character)) => phonemes.push(character.into()),
+                    Ok(_) => (), // won't reach here
+                    Err(err) => errors.push(err),
+                }
+            }
+            unexpected => errors.push(UnexpectedToken(unexpected).sign()),
+        }
+    }
+
+    check_errors(phonemes, errors)
 }
 
 fn parse_config(file: &mut impl Iterator<Item = Token>) -> ResultV<Config> {
@@ -624,13 +660,3 @@ fn end_line(file: &mut impl Iterator<Item = Token>) -> ResultV<()> {
 fn end_block(token: &Token) -> bool {
     token.token != RawToken::BlockClose
 }
-
-// // If the error vector contains errors, then return those errors. Otherwise,
-// // return `ok`
-// fn check_errors<T, E>(ok: T, errors: Vec<E>) -> Result<T, Vec<E>> {
-//     if errors.is_empty() {
-//         Ok(ok)
-//     } else {
-//         Err(errors)
-//     }
-// }

@@ -1,9 +1,7 @@
 use std::collections::VecDeque;
 use std::fmt::{Debug, Display};
-use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io::BufRead;
 use std::iter::Peekable;
-use std::path::PathBuf;
 
 use itertools::{Itertools, PeekingNext};
 
@@ -12,7 +10,7 @@ use crate::phonemes::SelectorCode;
 
 #[derive(Debug)]
 pub enum LexerErrorType {
-    FileError(std::io::Error),
+    IOError(std::io::Error),
 }
 
 impl ErrorType for LexerErrorType {
@@ -24,20 +22,20 @@ impl ErrorType for LexerErrorType {
 impl Display for LexerErrorType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::FileError(e) => write!(f, "File Error: {}", e),
+            Self::IOError(e) => write!(f, "IO Error: {}", e),
         }
     }
 }
 
 use LexerErrorType::*;
 
-pub struct FileLexer {
-    file: BufReader<File>,
+pub struct Lexer<T: BufRead> {
+    file: T,
     current_line_tokens: VecDeque<Token>,
     line_num: usize,
 }
 
-impl FileLexer {
+impl<T: BufRead> Lexer<T> {
     fn lex_line(&mut self) -> Option<Result<()>> {
         let mut next_line = String::new();
         let read_amount = self.file.read_line(&mut next_line);
@@ -45,7 +43,7 @@ impl FileLexer {
         if let Ok(0) = read_amount {
             return None;
         } else if let Err(e) = read_amount {
-            return Some(Err(FileError(e).at(FilePosition {
+            return Some(Err(IOError(e).at(FilePosition {
                 line: self.line_num + 1,
                 char: 0,
             })));
@@ -76,18 +74,16 @@ impl FileLexer {
         return Some(Ok(()));
     }
 
-    pub fn lex_file(path: PathBuf) -> Result<FileLexer> {
-        let file = File::open(path).map_err(|e| FileError(e).sign())?;
-
-        Ok(FileLexer {
-            file: BufReader::new(file),
+    pub fn lex(input: T) -> Lexer<T> {
+        Lexer {
+            file: input,
             current_line_tokens: VecDeque::new(),
             line_num: 0,
-        })
+        }
     }
 }
 
-impl Iterator for FileLexer {
+impl<T: BufRead> Iterator for Lexer<T> {
     type Item = Result<Token>;
 
     fn next(&mut self) -> Option<Self::Item> {
