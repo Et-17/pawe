@@ -9,9 +9,8 @@ pub struct Cli {
     #[command(subcommand)]
     pub command: Command,
 
-    /// Entry configuration file to use
-    #[arg(short, long, value_name = "path")]
-    pub config: PathBuf,
+    #[command(flatten)]
+    pub config: ConfigArgs,
 
     /// Always write out all attributes of phonemes instead of reducing them to
     /// a base character
@@ -24,6 +23,13 @@ pub enum Command {
     /// Predict the evolution of a word from one language to another
     #[command(visible_alias = "ev")]
     Evolve(EvolveArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct ConfigArgs {
+    /// Specify entry configuration file or the directory to search in
+    #[arg(short, long, value_name = "path", global = true)]
+    pub config: Option<PathBuf>,
 }
 
 #[derive(Args, Debug)]
