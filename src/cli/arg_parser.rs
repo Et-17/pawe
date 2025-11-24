@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand};
 
 #[derive(Parser, Debug)]
 #[command(version, about)]
@@ -51,11 +51,6 @@ pub struct EvolveArgs {
     #[arg(short, long, value_name = "language")]
     pub end: Option<String>,
 
-    /// Use the specified routing method to connect the start and end
-    /// languages
-    #[arg(short, long, value_name = "method", value_enum, default_value_t = RoutingMethods::LeastSteps)]
-    pub route: RoutingMethods,
-
     #[command(flatten)]
     pub output: EvolutionOutputArgs,
 }
@@ -83,20 +78,6 @@ pub struct EvolutionOutputArgs {
     /// Output result stages separated by commas instead of newlines
     #[arg(long)]
     pub csv: bool,
-}
-
-#[derive(ValueEnum, Debug, Clone)]
-pub enum RoutingMethods {
-    /// maximizes language steps
-    MostSteps,
-    /// minimizes language steps
-    LeastSteps,
-    /// maximizes included rules
-    MostRules,
-    /// minimizes included rules
-    LeastRules,
-    /// only uses explicitly configured evolutions
-    Direct,
 }
 
 #[derive(Args, Debug)]
