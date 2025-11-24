@@ -1,5 +1,6 @@
 use std::fmt::Display;
 
+use crate::cli::TreeNode;
 use crate::cli::arg_parser::EvolutionOutputArgs;
 use crate::phonemes::Phoneme;
 
@@ -76,4 +77,45 @@ pub fn display_final_result(word: &[Phoneme], args: &EvolutionOutputArgs) {
 pub fn display_start<T: Display>(word: &[Phoneme], lang: &T, args: &EvolutionOutputArgs) {
     display_label(lang, args);
     display_word_stage(word, true, args);
+}
+
+pub fn display_tree(tree: &TreeNode) {
+    print!("{}: ", tree.language);
+    display_word(&tree.word);
+    println!();
+
+    display_tree_node_children(&tree.children, &String::new());
+}
+
+fn gen_tree_indent(last: bool) -> &'static str {
+    if last { "    " } else { "│   " }
+}
+
+fn display_tree_node(tree: &TreeNode, prior: &impl Display, last: bool) {
+    print!("{prior}");
+
+    if last {
+        print!("└───");
+    } else {
+        print!("├───");
+    }
+
+    print!("{}: ", tree.language);
+    display_word(&tree.word);
+    println!();
+
+    let new_prior = format!("{prior}{}", gen_tree_indent(last));
+
+    display_tree_node_children(&tree.children, &new_prior);
+}
+
+fn display_tree_node_children(children: &[TreeNode], prior: &impl Display) {
+    let Some((last_child, body_children)) = children.split_last() else {
+        return;
+    };
+
+    for child in body_children {
+        display_tree_node(child, prior, false);
+    }
+    display_tree_node(last_child, prior, true);
 }

@@ -23,6 +23,10 @@ pub enum Command {
     /// Predict the evolution of a word from one language to another
     #[command(visible_alias = "ev")]
     Evolve(EvolveArgs),
+
+    /// Predict the evolution of a word to all descendents of a language
+    #[command(visible_alias = "tr")]
+    Tree(TreeArgs),
 }
 
 #[derive(Args, Debug)]
@@ -93,4 +97,19 @@ pub enum RoutingMethods {
     LeastRules,
     /// only uses explicitly configured evolutions
     Direct,
+}
+
+#[derive(Args, Debug)]
+pub struct TreeArgs {
+    /// The word to evolve, with phonemes seperated by whitespace
+    pub word: String,
+
+    /// Language to start from. If not specified, the first defined language
+    /// will be used.
+    #[arg(short, long, value_name = "language")]
+    pub start: Option<String>,
+
+    /// Only evolve to a specific depth
+    #[arg(short, long, value_name = "levels")]
+    pub depth: Option<u32>,
 }

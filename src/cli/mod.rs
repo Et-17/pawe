@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use clap::Parser;
@@ -5,11 +6,11 @@ use clap::Parser;
 use arg_parser::{Cli, Command};
 use itertools::Itertools;
 
-use crate::cli::arg_parser::{ConfigArgs, EvolutionOutputArgs, EvolveArgs};
+use crate::cli::arg_parser::{ConfigArgs, EvolutionOutputArgs, EvolveArgs, TreeArgs};
 use crate::config::{Config, Label};
 use crate::error_handling::{ErrorType, FilePosition, Result, ResultV, wrap_io_error};
-use crate::evolution::do_rule;
 use crate::evolution::routing::find_route;
+use crate::evolution::{Rule, do_rule};
 use crate::parser::{parse_config_file, parse_word};
 use crate::phonemes::Phoneme;
 
@@ -23,6 +24,7 @@ pub static mut NO_BASE: bool = false;
 #[derive(Debug)]
 pub enum CliErrorType {
     NoConfigFile(PathBuf),
+    UndefinedLanguage(String),
 }
 
 impl ErrorType for CliErrorType {
@@ -36,6 +38,9 @@ impl std::fmt::Display for CliErrorType {
         match self {
             Self::NoConfigFile(path) => {
                 write!(f, "Config path `{}` does not exist", path.display())
+            }
+            Self::UndefinedLanguage(lang) => {
+                write!(f, "Could not find language `{lang}`")
             }
         }
     }
@@ -55,6 +60,7 @@ pub fn do_cli() -> ResultV<()> {
 
     match args.command {
         Command::Evolve(e_args) => evolve(e_args, args.config),
+        Command::Tree(t_args) => tree(t_args, args.config),
     }
 }
 
@@ -148,4 +154,76 @@ fn do_evolution_step(
     output::display_lang_result(&word, args);
 
     word
+}
+
+fn tree(args: TreeArgs, config_args: ConfigArgs) -> ResultV<()> {
+    let config_path = find_config_file(config_args)?;
+    let mut config = parse_config_file(config_path)?;
+    let word = parse_word(&args.word, &mut config)?;
+
+    let start_name = fill_in_param(&args.start, &config.first_language);
+    let Some(start) = config.languages.encode(&start_name) else {
+        return Err(UndefinedLanguage(start_name).sign().into());
+    };
+
+    let result_tree = gen_tree(word, start, 0, &args, &config);
+
+    output::display_tree(&result_tree);
+
+    Ok(())
+}
+
+fn no_display_evolution_step(word: Vec<Phoneme>, rules: &[Rule], config: &Config) -> Vec<Phoneme> {
+    rules.iter().fold(word, |w, rule| {
+        do_rule(&w, &rule, &config.characters).unwrap_or(w)
+    })
+}
+
+pub struct TreeNode {
+    language: Label,
+    word: Vec<Phoneme>,
+    children: Vec<TreeNode>,
+}
+
+fn gen_tree(
+    word: Vec<Phoneme>,
+    language: Label,
+    depth: u32,
+    args: &TreeArgs,
+    config: &Config,
+) -> TreeNode {
+    if args.depth.is_some_and(|max| depth >= max) {
+        return TreeNode {
+            language,
+            word,
+            children: Vec::new(),
+        };
+    }
+
+    let child_generator = gen_tree_child(&word, depth, args, config);
+    let children = config
+        .evolutions
+        .get(&language)
+        .map(HashMap::iter)
+        .unwrap_or_default()
+        .map(child_generator)
+        .collect();
+
+    TreeNode {
+        language,
+        word,
+        children,
+    }
+}
+
+fn gen_tree_child(
+    word: &Vec<Phoneme>,
+    depth: u32,
+    args: &TreeArgs,
+    config: &Config,
+) -> impl FnMut((&Label, &Vec<Rule>)) -> TreeNode {
+    move |(child, child_rules)| {
+        let new_word = no_display_evolution_step(word.clone(), child_rules, config);
+        gen_tree(new_word, child.clone(), depth + 1, args, config)
+    }
 }
