@@ -3,6 +3,7 @@ use std::fmt::{Debug, Display};
 
 use itertools::Itertools;
 
+use crate::cli::NO_BASE;
 use crate::config::{Character, Label};
 
 pub type SelectorCode = u8;
@@ -122,13 +123,15 @@ impl Phoneme {
     // Converts this phoneme to a set of Attributes assuming that there is a
     // base phoneme. If there is no base, it simple returns an empty Vec
     fn attr_display(&self) -> Vec<Attribute> {
+        let no_base = unsafe { NO_BASE };
+
         let mut attrs = Vec::new();
-        if let Some(ref base_value) = self.base {
+        if !no_base && let Some(ref base_value) = self.base {
             attrs.push(Attribute::Character(base_value.clone()));
         }
 
         for (param, self_value) in self.parameters.iter() {
-            if let Some(ref base) = self.base {
+            if !no_base && let Some(ref base) = self.base {
                 if let Some(base_value) = base.phoneme.parameters.get(&param) {
                     if *self_value == *base_value {
                         continue;
@@ -144,7 +147,7 @@ impl Phoneme {
         }
 
         for (feat, self_value) in self.features.iter() {
-            if let Some(ref base) = self.base {
+            if !no_base && let Some(ref base) = self.base {
                 if let Some(base_value) = base.phoneme.features.get(&feat) {
                     if *self_value == *base_value {
                         continue;

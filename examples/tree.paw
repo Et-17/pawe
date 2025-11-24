@@ -1,0 +1,19 @@
+languages {
+    Alpha;
+    Bravo;
+    Charlie;
+    Delta;
+    Echo;
+    Foxtrot;
+    Golf;
+}
+
+evolve Alpha to Bravo {}
+evolve Delta to Echo {}
+evolve Delta to Charlie {}
+evolve Alpha to Delta {}
+evolve Bravo to Charlie {}
+evolve Bravo to Foxtrot {}
+evolve Charlie to Golf {}
+evolve Foxtrot to Charlie {}
+evolve Foxtrot to Delta {}

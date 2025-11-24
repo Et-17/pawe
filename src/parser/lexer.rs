@@ -1,43 +1,23 @@
 use std::collections::VecDeque;
-use std::fmt::{Debug, Display};
-use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::fmt::Debug;
+use std::io::BufRead;
 use std::iter::Peekable;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 use itertools::{Itertools, PeekingNext};
 
-use crate::error_handling::{ErrorType, FilePosition, Result};
+use crate::error_handling::{FilePosition, Result, wrap_io_error};
 use crate::phonemes::SelectorCode;
 
-#[derive(Debug)]
-pub enum LexerErrorType {
-    FileError(std::io::Error),
-}
-
-impl ErrorType for LexerErrorType {
-    fn module(&self) -> String {
-        String::from("lexer")
-    }
-}
-
-impl Display for LexerErrorType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::FileError(e) => write!(f, "File Error: {}", e),
-        }
-    }
-}
-
-use LexerErrorType::*;
-
-pub struct FileLexer {
-    file: BufReader<File>,
+pub struct Lexer<T: BufRead> {
+    file: T,
     current_line_tokens: VecDeque<Token>,
     line_num: usize,
+    path: Option<Rc<Path>>, // For generating errors
 }
 
-impl FileLexer {
+impl<T: BufRead> Lexer<T> {
     fn lex_line(&mut self) -> Option<Result<()>> {
         let mut next_line = String::new();
         let read_amount = self.file.read_line(&mut next_line);
@@ -45,10 +25,9 @@ impl FileLexer {
         if let Ok(0) = read_amount {
             return None;
         } else if let Err(e) = read_amount {
-            return Some(Err(FileError(e).at(FilePosition {
-                line: self.line_num + 1,
-                char: 0,
-            })));
+            let file_pos = FilePosition::new(self.path.as_ref(), Some(self.line_num + 1), None);
+            let wrapped_error = wrap_io_error("lexer", Some(&file_pos))(e);
+            return Some(Err(wrapped_error));
         }
 
         self.line_num += 1;
@@ -56,7 +35,10 @@ impl FileLexer {
         let mut graphemes = next_line
             .chars()
             .enumerate()
-            .map(MarkedChar::from_enumerated_grapheme(self.line_num))
+            .map(MarkedChar::from_enumerated_grapheme(
+                self.line_num,
+                self.path.as_ref(),
+            ))
             .peekable();
 
         while graphemes.peek().is_some() {
@@ -76,18 +58,17 @@ impl FileLexer {
         return Some(Ok(()));
     }
 
-    pub fn lex_file(path: PathBuf) -> Result<FileLexer> {
-        let file = File::open(path).map_err(|e| FileError(e).sign())?;
-
-        Ok(FileLexer {
-            file: BufReader::new(file),
+    pub fn lex(input: T, path: Option<PathBuf>) -> Lexer<T> {
+        Lexer {
+            file: input,
             current_line_tokens: VecDeque::new(),
             line_num: 0,
-        })
+            path: path.map(Into::into),
+        }
     }
 }
 
-impl Iterator for FileLexer {
+impl<T: BufRead> Iterator for Lexer<T> {
     type Item = Result<Token>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -97,7 +78,7 @@ impl Iterator for FileLexer {
             }
         }
 
-        Some(Ok(self.current_line_tokens.pop_front()?))
+        Ok(self.current_line_tokens.pop_front()).transpose()
     }
 }
 
@@ -165,10 +146,13 @@ struct MarkedChar {
 impl MarkedChar {
     // Generates a closure for a specific line number that can be used in a
     // map after .graphemes().enumerate()
-    fn from_enumerated_grapheme(line: usize) -> impl Fn((usize, char)) -> MarkedChar {
+    fn from_enumerated_grapheme(
+        line: usize,
+        path: Option<&Rc<Path>>,
+    ) -> impl Fn((usize, char)) -> MarkedChar {
         move |(i, grapheme): (usize, char)| MarkedChar {
             grapheme,
-            pos: FilePosition { line, char: i + 1 },
+            pos: FilePosition::new(path, Some(line), Some(i + 1)),
         }
     }
 }

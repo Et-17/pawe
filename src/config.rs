@@ -212,6 +212,8 @@ pub struct Config {
     pub parameters: ParameterEncoding,
     pub characters: HashMap<String, Character>,
     pub evolutions: HashMap<Label, HashMap<Label, Vec<Rule>>>,
+    pub first_language: Option<String>,
+    pub last_language: Option<String>,
 }
 
 impl Config {
