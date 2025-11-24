@@ -4,7 +4,9 @@ pub mod lexer;
 use itertools::Itertools;
 
 use crate::config::{Character, CharacterDefinition, Config, Label};
-use crate::error_handling::{Error, ErrorType, FilePosition, Result, ResultV, check_errors, wrap_io_error};
+use crate::error_handling::{
+    Error, ErrorType, FilePosition, Result, ResultV, check_errors, wrap_io_error,
+};
 use crate::evolution::{Environment, EnvironmentAtom, InputAtom, Rule};
 use crate::phonemes::{Attribute, Filter, Phoneme, Selector, SelectorCode, UnboundPhoneme};
 
@@ -16,7 +18,6 @@ pub fn parse_config_file(path: std::path::PathBuf) -> ResultV<Config> {
         let file_pos = FilePosition::new(Some(&path.as_path().into()), None, None);
         wrap_io_error("parser", Some(&file_pos))(e)
     })?;
-
 
     Lexer::lex(std::io::BufReader::new(file), Some(path))
         .process_results(|mut tokens| parse_config(&mut tokens))?
@@ -44,7 +45,7 @@ fn parse_unwrapped_word(
             RawToken::UnmarkedIdentifier(ident) => {
                 match parse_character(config, ident, &token.pos) {
                     Ok(Attribute::Character(character)) => phonemes.push(character.into()),
-                    Ok(_) => (), // won't reach here
+                    Ok(_) => unreachable!(),
                     Err(err) => errors.push(err),
                 }
             }
@@ -86,6 +87,14 @@ fn parse_languages(
 ) -> ResultV<()> {
     confirm_token_type(file, RawToken::BlockOpen, ExpectedBlock, pos)?;
     let languages = parse_identifier_block(file)?;
+
+    if config.first_language.is_none() {
+        config.first_language = languages.first().cloned();
+    }
+
+    if !languages.is_empty() {
+        config.last_language = languages.last().cloned();
+    }
 
     config.languages.extend(languages);
 
@@ -188,7 +197,12 @@ fn parse_character_def(
         return Err(ExpectedIdentifier.at(char_token.pos).into());
     };
 
-    confirm_token_type(file, RawToken::PhonemeOpen, ExpectedPhoneme, &char_token.pos)?;
+    confirm_token_type(
+        file,
+        RawToken::PhonemeOpen,
+        ExpectedPhoneme,
+        &char_token.pos,
+    )?;
     let phoneme = parse_phoneme(file, config)?;
 
     if config
@@ -622,7 +636,11 @@ fn parse_parameter(
     }
 }
 
-fn parse_character(config: &mut Config, character: String, pos: &FilePosition) -> Result<Attribute> {
+fn parse_character(
+    config: &mut Config,
+    character: String,
+    pos: &FilePosition,
+) -> Result<Attribute> {
     match config.characters.get(&character) {
         Some(phoneme) => Ok(Attribute::Character(phoneme.to_owned())),
         None => Err(UndefinedCharacter(character).at(pos.clone())),

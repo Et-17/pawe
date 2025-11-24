@@ -7,7 +7,7 @@ use itertools::Itertools;
 
 use crate::cli::arg_parser::{ConfigArgs, EvolveArgs};
 use crate::config::{Config, Label};
-use crate::error_handling::{ErrorType, Result, ResultV};
+use crate::error_handling::{ErrorType, FilePosition, Result, ResultV, wrap_io_error};
 use crate::evolution::do_rule;
 use crate::evolution::routing::find_route;
 use crate::parser::{parse_config_file, parse_word};
@@ -22,7 +22,6 @@ pub static mut NO_BASE: bool = false;
 #[derive(Debug)]
 pub enum CliErrorType {
     NoConfigFile(PathBuf),
-    IOError(std::io::Error),
 }
 
 impl ErrorType for CliErrorType {
@@ -37,7 +36,6 @@ impl std::fmt::Display for CliErrorType {
             Self::NoConfigFile(path) => {
                 write!(f, "Config path `{}` does not exist", path.display())
             }
-            Self::IOError(err) => write!(f, "IO Error: {err}"),
         }
     }
 }
@@ -81,7 +79,10 @@ fn verify_config_existence(path: PathBuf) -> Result<PathBuf> {
     match path.try_exists() {
         Ok(true) => Ok(path),
         Ok(false) => Err(NoConfigFile(path).sign()),
-        Err(err) => Err(IOError(err).sign()),
+        Err(err) => Err(wrap_io_error(
+            "cli",
+            Some(&FilePosition::new(Some(&path.into()), None, None)),
+        )(err)),
     }
 }
 
@@ -95,9 +96,22 @@ fn evolve(args: EvolveArgs, config_args: ConfigArgs) -> ResultV<()> {
         false => "    ",
     };
 
+    let start_name = args
+        .start
+        .as_ref()
+        .or(config.first_language.as_ref())
+        .cloned()
+        .unwrap_or_default();
+    let end_name = args
+        .end
+        .as_ref()
+        .or(config.last_language.as_ref())
+        .cloned()
+        .unwrap_or_default();
+
     let route = find_route(
-        args.start.clone(),
-        args.end.clone(),
+        start_name.clone(),
+        end_name.clone(),
         &config.languages,
         &config.evolutions,
     )?;
@@ -105,7 +119,7 @@ fn evolve(args: EvolveArgs, config_args: ConfigArgs) -> ResultV<()> {
 
     if !args.no_stages {
         if !args.no_labels {
-            println!("{}", args.start);
+            println!("{}", &start_name);
         }
         println!("{indent}{}", word.iter().join(""));
     }

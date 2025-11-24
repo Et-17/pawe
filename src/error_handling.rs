@@ -1,5 +1,5 @@
 use std::fmt::{Debug, Display};
-use std::path::{Path};
+use std::path::Path;
 use std::rc::Rc;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
@@ -28,12 +28,12 @@ impl Display for FilePosition {
         match self.path {
             Some(ref path) => match self.internal {
                 Some(ref internal) => write!(f, "{}:{internal}", path.display()),
-                None => write!(f, "{}", path.display())
+                None => write!(f, "{}", path.display()),
             },
             None => match self.internal {
                 Some(ref internal) => write!(f, "{internal}"),
                 None => write!(f, "EMPTY=FP"),
-            }
+            },
         }
     }
 }
@@ -42,10 +42,9 @@ impl FilePosition {
     pub fn new(path: Option<&Rc<Path>>, line: Option<usize>, char: Option<usize>) -> Self {
         Self {
             path: path.map(Clone::clone),
-            internal: line.map(|l| InternalFilePosition { line: l, char })
+            internal: line.map(|l| InternalFilePosition { line: l, char }),
         }
     }
-
 }
 
 pub trait ErrorType: Display + Debug {
@@ -129,11 +128,14 @@ impl Display for IOError {
 }
 
 // Returns a closure that wraps IO errors as IOError
-pub fn wrap_io_error(module: impl ToString, pos: Option<&FilePosition>) -> impl Fn(std::io::Error) -> Error {
+pub fn wrap_io_error(
+    module: impl ToString,
+    pos: Option<&FilePosition>,
+) -> impl Fn(std::io::Error) -> Error {
     move |error: std::io::Error| Error {
         pos: pos.map(Clone::clone),
         module: module.to_string(),
-        error: Box::new(IOError(error))
+        error: Box::new(IOError(error)),
     }
 }
 

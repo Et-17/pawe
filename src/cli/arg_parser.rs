@@ -37,11 +37,15 @@ pub struct EvolveArgs {
     /// The word to evolve, with phonemes seperated by whitespace
     pub word: String,
 
-    /// Language to start from
-    pub start: String,
+    /// Language to start from. If not specified, the first defined language
+    /// will be used.
+    #[arg(short, long, value_name = "language")]
+    pub start: Option<String>,
 
-    /// Language to evolve to
-    pub end: String,
+    /// Language to evolve to. If not specified, the last defined language will
+    /// be used
+    #[arg(short, long, value_name = "language")]
+    pub end: Option<String>,
 
     /// Use the specified routing method to connect the start and end
     /// languages

@@ -1,5 +1,5 @@
 use std::collections::VecDeque;
-use std::fmt::{Debug};
+use std::fmt::Debug;
 use std::io::BufRead;
 use std::iter::Peekable;
 use std::path::{Path, PathBuf};
@@ -21,7 +21,7 @@ impl<T: BufRead> Lexer<T> {
     fn lex_line(&mut self) -> Option<Result<()>> {
         let mut next_line = String::new();
         let read_amount = self.file.read_line(&mut next_line);
-        
+
         if let Ok(0) = read_amount {
             return None;
         } else if let Err(e) = read_amount {
@@ -35,7 +35,10 @@ impl<T: BufRead> Lexer<T> {
         let mut graphemes = next_line
             .chars()
             .enumerate()
-            .map(MarkedChar::from_enumerated_grapheme(self.line_num, self.path.as_ref()))
+            .map(MarkedChar::from_enumerated_grapheme(
+                self.line_num,
+                self.path.as_ref(),
+            ))
             .peekable();
 
         while graphemes.peek().is_some() {
@@ -143,10 +146,13 @@ struct MarkedChar {
 impl MarkedChar {
     // Generates a closure for a specific line number that can be used in a
     // map after .graphemes().enumerate()
-    fn from_enumerated_grapheme(line: usize, path: Option<&Rc<Path>>) -> impl Fn((usize, char)) -> MarkedChar {
+    fn from_enumerated_grapheme(
+        line: usize,
+        path: Option<&Rc<Path>>,
+    ) -> impl Fn((usize, char)) -> MarkedChar {
         move |(i, grapheme): (usize, char)| MarkedChar {
             grapheme,
-            pos: FilePosition::new(path, Some(line), Some(i + 1))
+            pos: FilePosition::new(path, Some(line), Some(i + 1)),
         }
     }
 }
