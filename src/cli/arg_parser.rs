@@ -52,6 +52,12 @@ pub struct EvolveArgs {
     #[arg(short, long, value_name = "method", value_enum, default_value_t = RoutingMethods::LeastSteps)]
     pub route: RoutingMethods,
 
+    #[command(flatten)]
+    pub output: EvolutionOutputArgs,
+}
+
+#[derive(Args, Debug)]
+pub struct EvolutionOutputArgs {
     /// Only output the final result
     #[arg(short, long)]
     pub no_stages: bool,
@@ -59,16 +65,20 @@ pub struct EvolveArgs {
     /// Output the result after applying rules that change the word instead of
     /// just after each language stage
     #[arg(long, conflicts_with = "no_stages")]
-    pub show_rules: bool,
+    pub show_changes: bool,
 
     /// Output the result after applying every rule, including ones that don't
     /// change the word
-    #[arg(long, requires = "show_rules")]
-    pub all_rules: bool,
+    #[arg(long, requires = "show_changes")]
+    pub show_all_rules: bool,
 
     /// Don't label the different stages
-    #[arg(long)]
+    #[arg(long, conflicts_with = "no_stages")]
     pub no_labels: bool,
+
+    /// Output result stages separated by commas instead of newlines
+    #[arg(long)]
+    pub csv: bool,
 }
 
 #[derive(ValueEnum, Debug, Clone)]

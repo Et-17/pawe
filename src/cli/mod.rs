@@ -5,7 +5,7 @@ use clap::Parser;
 use arg_parser::{Cli, Command};
 use itertools::Itertools;
 
-use crate::cli::arg_parser::{ConfigArgs, EvolveArgs};
+use crate::cli::arg_parser::{ConfigArgs, EvolutionOutputArgs, EvolveArgs};
 use crate::config::{Config, Label};
 use crate::error_handling::{ErrorType, FilePosition, Result, ResultV, wrap_io_error};
 use crate::evolution::do_rule;
@@ -14,6 +14,7 @@ use crate::parser::{parse_config_file, parse_word};
 use crate::phonemes::Phoneme;
 
 mod arg_parser;
+mod output;
 
 const EXPECTED_PRIMARY_CONFIG_NAME: &str = "primary.paw";
 
@@ -86,28 +87,24 @@ fn verify_config_existence(path: PathBuf) -> Result<PathBuf> {
     }
 }
 
+// This is for filling in optional parameters with automatic values that might
+// not exist. If it doesn't, it uses the default of the type. Which ever it goes
+// with, this will clone it before returning it.
+fn fill_in_param<T: Default + Clone>(param: &Option<T>, fill_in: &Option<T>) -> T {
+    param
+        .as_ref()
+        .or_else(|| fill_in.as_ref())
+        .cloned()
+        .unwrap_or_default()
+}
+
 fn evolve(args: EvolveArgs, config_args: ConfigArgs) -> ResultV<()> {
     let config_path = find_config_file(config_args)?;
     let mut config = parse_config_file(config_path)?;
     let mut word = parse_word(&args.word, &mut config)?;
 
-    let indent = match args.no_labels {
-        true => "",
-        false => "    ",
-    };
-
-    let start_name = args
-        .start
-        .as_ref()
-        .or(config.first_language.as_ref())
-        .cloned()
-        .unwrap_or_default();
-    let end_name = args
-        .end
-        .as_ref()
-        .or(config.last_language.as_ref())
-        .cloned()
-        .unwrap_or_default();
+    let start_name = fill_in_param(&args.start, &config.first_language);
+    let end_name = fill_in_param(&args.end, &config.last_language);
 
     let route = find_route(
         start_name.clone(),
@@ -117,20 +114,13 @@ fn evolve(args: EvolveArgs, config_args: ConfigArgs) -> ResultV<()> {
     )?;
     let route_pairs = route.iter().tuple_windows();
 
-    if !args.no_stages {
-        if !args.no_labels {
-            println!("{}", &start_name);
-        }
-        println!("{indent}{}", word.iter().join(""));
-    }
+    output::display_start(&word, &start_name, &args.output);
 
     for (start, end) in route_pairs {
-        word = do_evolution_step(word, start, end, indent, &args, &config);
+        word = do_evolution_step(word, start, end, &args.output, &config);
     }
 
-    if args.no_stages {
-        println!("{}", word.iter().join(""));
-    }
+    output::display_final_result(&word, &args.output);
 
     Ok(())
 }
@@ -139,34 +129,23 @@ fn do_evolution_step(
     mut word: Vec<Phoneme>,
     start: &Label,
     end: &Label,
-    ident: &str,
-    args: &EvolveArgs,
+    args: &EvolutionOutputArgs,
     config: &Config,
 ) -> Vec<Phoneme> {
-    if args.show_rules && !args.no_labels {
-        println!("Evolving from {start} to {end}");
-    } else if !args.no_stages && !args.no_labels {
-        println!("{end}");
-    }
+    output::display_evolution_label(start, end, args);
 
     let rules = config.evolutions.get(start).unwrap().get(end).unwrap();
 
     for rule in rules {
         if let Some(new_word) = do_rule(&word, &rule, &config.characters) {
             word = new_word;
-            if args.show_rules {
-                println!("{ident}{}", word.iter().join(""));
-            }
+            output::display_application(&word, true, args);
         } else {
-            if args.all_rules {
-                println!("{ident}{}", word.iter().join(""));
-            }
+            output::display_application(&word, false, args);
         }
     }
 
-    if !args.show_rules && !args.no_stages {
-        println!("{ident}{}", word.iter().join(""));
-    }
+    output::display_lang_result(&word, args);
 
     word
 }
