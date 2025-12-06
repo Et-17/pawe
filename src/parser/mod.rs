@@ -44,9 +44,8 @@ fn parse_unwrapped_word(
             },
             RawToken::UnmarkedIdentifier(ident) => {
                 match parse_character(config, ident, &token.pos) {
-                    Ok(Attribute::Character(character)) => phonemes.push(character.into()),
-                    Ok(_) => unreachable!(),
-                    Err(err) => errors.push(err),
+                    Ok(phoneme) => phonemes.push(phoneme),
+                    Err(mut errs) => errors.append(&mut errs),
                 }
             }
             unexpected => errors.push(UnexpectedToken(unexpected).sign()),
@@ -68,6 +67,7 @@ fn parse_config(file: &mut impl Iterator<Item = Token>) -> ResultV<Config> {
             RawToken::Features => parse_features(file, &mut config, pos),
             RawToken::Parameters => parse_parameters(file, &mut config, pos),
             RawToken::Characters => parse_characters(file, &mut config, pos),
+            RawToken::Diacritics => parse_diacritics(file, &mut config, pos),
             RawToken::Evolve => parse_evolve(file, &mut config, pos),
             _ => Err(ExpectedBlockIdentifier.at(token.pos).into()),
         };
@@ -186,8 +186,8 @@ fn parse_characters(
     check_errors((), errors)
 }
 
-// WARNING: This will not clear until EOL, the calling function must ensure the
-// line ends properly
+// WARNING: This will not clear until EOL. The calling function must ensure the
+// line ends properly.
 fn parse_character_def(
     file: &mut impl Iterator<Item = Token>,
     config: &mut Config,
@@ -217,6 +217,71 @@ fn parse_character_def(
     }
 
     Ok(())
+}
+
+fn parse_diacritics(
+    file: &mut impl Iterator<Item = Token>,
+    config: &mut Config,
+    pos: &FilePosition,
+) -> ResultV<()> {
+    let mut errors = Vec::new();
+
+    confirm_token_type(file, RawToken::BlockOpen, ExpectedBlock, pos)?;
+    let mut def_block = file.take_while(end_block);
+    while let Some(token) = def_block.next() {
+        if token.token == RawToken::EOL {
+            continue;
+        }
+
+        let next_def_res = parse_diacritic_def(&mut def_block, config, token);
+        if let Err(mut errs) = next_def_res {
+            errors.append(&mut errs);
+            // Don't throw non-line end errors if we fail early
+            let _ = end_line(&mut def_block);
+            continue;
+        }
+
+        if let Err(mut errs) = end_line(&mut def_block) {
+            errors.append(&mut errs);
+        }
+    }
+
+    check_errors((), errors)
+}
+
+// WARNING: Like parse_character_def(), this will not clear until EOL. The
+// calling function must ensure the line ends properly.
+fn parse_diacritic_def(
+    file: &mut impl Iterator<Item = Token>,
+    config: &mut Config,
+    dia_token: Token,
+) -> ResultV<()> {
+    let RawToken::UnmarkedIdentifier(def_str) = dia_token.token else {
+        return Err(ExpectedIdentifier.at(dia_token.pos).into());
+    };
+
+    let Some((_, diacritic_str)) = def_str.split_at_checked(1) else {
+        return Err(InvalidDiacriticDef.at(dia_token.pos).into());
+    };
+
+    if diacritic_str.chars().count() > 1 {
+        return Err(DiacriticTooLong(diacritic_str.into())
+            .at(dia_token.pos)
+            .into());
+    }
+    let Some(diacritic) = diacritic_str.chars().next() else {
+        return Err(InvalidDiacriticDef.at(dia_token.pos).into());
+    };
+
+    let Some(next_token) = file.next() else {
+        return Err(ExpectedAttribute.at(dia_token.pos).into());
+    };
+    let attribute = parse_attribute(config, next_token, true)?;
+
+    config
+        .diacritics
+        .add(diacritic, attribute)
+        .map_err(|_| Redefinition.at(dia_token.pos).into())
 }
 
 fn parse_evolve(
@@ -312,15 +377,10 @@ fn parse_evolution_rule(
                 Ok(phoneme) => input.push(InputAtom::Phoneme(phoneme)),
                 Err(mut errs) => errors.append(&mut errs),
             },
-            RawToken::UnmarkedIdentifier(ident) => {
-                match parse_character(config, ident, &token.pos) {
-                    Ok(Attribute::Character(character)) => {
-                        input.push(InputAtom::Phoneme(character.into()))
-                    }
-                    Ok(_) => (), // won't reach here
-                    Err(err) => errors.push(err),
-                }
-            }
+            RawToken::UnmarkedIdentifier(ident) => match parse_character(config, ident, pos) {
+                Ok(phoneme) => input.push(InputAtom::Phoneme(phoneme)),
+                Err(mut errs) => errors.append(&mut errs),
+            },
             unexpected => errors.push(UnexpectedToken(unexpected).at(token.pos)),
         }
     }
@@ -332,8 +392,8 @@ fn parse_evolution_rule(
         match token.token {
             RawToken::UnmarkedIdentifier(ident) => {
                 match parse_character(config, ident, &token.pos) {
-                    Ok(attr) => output.push(std::iter::once(attr).collect()),
-                    Err(err) => errors.push(err),
+                    Ok(phoneme) => output.push(phoneme),
+                    Err(mut err) => errors.append(&mut err),
                 }
             }
             RawToken::PhonemeOpen => match parse_attribute_list(&mut output_iter, config, true) {
@@ -404,10 +464,8 @@ fn parse_evolution_environment(
             },
             RawToken::UnmarkedIdentifier(ident) => {
                 match parse_character(config, ident, &last_pos) {
-                    Ok(character) => pre_environment.push(EnvironmentAtom::Phoneme(
-                        std::iter::once(character).collect(),
-                    )),
-                    Err(err) => errors.push(err),
+                    Ok(phoneme) => pre_environment.push(EnvironmentAtom::Phoneme(phoneme)),
+                    Err(mut errs) => errors.append(&mut errs),
                 }
             }
             RawToken::Optional => {
@@ -470,10 +528,8 @@ fn parse_evolution_environment(
             },
             RawToken::UnmarkedIdentifier(ident) => {
                 match parse_character(config, ident, &token.pos) {
-                    Ok(character) => post_environment.push(EnvironmentAtom::Phoneme(
-                        std::iter::once(character).collect(),
-                    )),
-                    Err(err) => errors.push(err),
+                    Ok(phoneme) => post_environment.push(EnvironmentAtom::Phoneme(phoneme)),
+                    Err(mut errs) => errors.append(&mut errs),
                 }
             }
             RawToken::Optional => {
@@ -590,19 +646,22 @@ fn parse_attribute_list(
         .map(|token| parse_attribute(config, token, !is_phoneme))
         .partition_result();
 
-    check_errors(attributes, errors)
+    check_errors(attributes, errors.into_iter().flatten().collect_vec())
 }
 
-fn parse_attribute(config: &mut Config, token: Token, allow_neg_param: bool) -> Result<Attribute> {
-    match token.token {
-        RawToken::MarkedFeature(mark, feat) => parse_feature(config, mark, feat, &token.pos),
+fn parse_attribute(config: &mut Config, token: Token, allow_neg_param: bool) -> ResultV<Attribute> {
+    let res = match token.token {
+        RawToken::MarkedFeature(mark, feat) => parse_feature(config, mark, feat, &token.pos)?,
         RawToken::MarkedParameter(mark, param, variant) => {
-            parse_parameter(config, mark, param, variant, &token.pos, allow_neg_param)
+            parse_parameter(config, mark, param, variant, &token.pos, allow_neg_param)?
         }
-        RawToken::UnmarkedIdentifier(character) => parse_character(config, character, &token.pos),
-        RawToken::SelectorCode(code) => Ok(Attribute::Selection(code)),
-        unexpected => Err(UnexpectedToken(unexpected).at(token.pos)),
-    }
+        RawToken::UnmarkedIdentifier(character) => {
+            Attribute::Phoneme(parse_character(config, character, &token.pos)?)
+        }
+        RawToken::SelectorCode(code) => Attribute::Selection(code),
+        unexpected => return Err(UnexpectedToken(unexpected).at(token.pos).into()),
+    };
+    Ok(res)
 }
 
 fn parse_feature(
@@ -636,7 +695,36 @@ fn parse_parameter(
     }
 }
 
-fn parse_character(
+fn parse_character<T: FromIterator<Attribute>>(
+    config: &mut Config,
+    identifier: String,
+    pos: &FilePosition,
+) -> ResultV<T> {
+    let mut ident_chars = identifier.chars().peekable();
+    let mut attrs = Vec::new();
+
+    let base_string: String = ident_chars
+        .peeking_take_while(|&next| config.diacritics.decode(next).is_none())
+        .collect();
+    let base = parse_base_character(config, base_string, pos)?;
+    attrs.push(base);
+
+    let (diacritics, errors): (Vec<_>, Vec<_>) = ident_chars
+        .map(|dia| {
+            config
+                .diacritics
+                .decode(dia)
+                .cloned()
+                .ok_or_else(|| UndefinedDiacritic(dia).at(pos.clone()))
+        })
+        .partition_result();
+    check_errors((), errors)?;
+    attrs.extend(diacritics);
+
+    Ok(FromIterator::from_iter(attrs))
+}
+
+fn parse_base_character(
     config: &mut Config,
     character: String,
     pos: &FilePosition,

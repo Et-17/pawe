@@ -89,6 +89,7 @@ pub enum RawToken {
     Parameters, // parameters
     Features,   // features
     Characters, // characters
+    Diacritics, // diacritics
     Evolve,     // evolve
     To,         // to
 
@@ -177,6 +178,7 @@ fn lex_unmarked_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T
         "parameters" => RawToken::Parameters,
         "features" => RawToken::Features,
         "characters" => RawToken::Characters,
+        "diacritics" => RawToken::Diacritics,
         "evolve" => RawToken::Evolve,
         "to" => RawToken::To,
         _ => {

@@ -14,7 +14,7 @@ pub enum Attribute {
     Parameter(bool, Label, Label),
     Character(Character),
     Selection(SelectorCode),
-    BoundPhoneme(Phoneme),
+    Phoneme(Phoneme),
 }
 
 impl Attribute {
@@ -26,7 +26,7 @@ impl Attribute {
         if let Self::Selection(code) = self {
             selection_table
                 .get(&code)
-                .map(|&selected_phoneme| Attribute::BoundPhoneme(selected_phoneme.clone()))
+                .map(|&selected_phoneme| Attribute::Phoneme(selected_phoneme.clone()))
                 .unwrap_or(self)
         } else {
             self
@@ -37,13 +37,13 @@ impl Attribute {
 impl Display for Attribute {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Attribute::Feature(mark, label) => write!(f, "{}{}", mark_char(*mark), label),
+            Attribute::Feature(mark, feat) => write!(f, "{}{}", mark_char(*mark), feat),
             Attribute::Parameter(mark, param, var) => {
                 write!(f, "{}{}.{}", mark_char(*mark), param, var)
             }
             Attribute::Character(definition) => write!(f, "{}", definition.symbol),
             Attribute::Selection(code) => write!(f, "{}", code),
-            Attribute::BoundPhoneme(phoneme) => write!(f, "{}", phoneme),
+            Attribute::Phoneme(phoneme) => write!(f, "{}", phoneme),
         }
     }
 }
@@ -97,7 +97,7 @@ impl Phoneme {
                 self.add_character(definition);
             }
             Attribute::Selection(_) => (),
-            Attribute::BoundPhoneme(phoneme) => {
+            Attribute::Phoneme(phoneme) => {
                 self.add_phoneme(phoneme);
             }
         }

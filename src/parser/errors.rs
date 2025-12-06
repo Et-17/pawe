@@ -12,6 +12,7 @@ pub enum ParseErrorType {
     ExpectedEOL,
     ExpectedPhoneme,
     ExpectedLanguage,
+    ExpectedAttribute,
     ExpectedTo,
     MissingTarget,
 
@@ -20,8 +21,11 @@ pub enum ParseErrorType {
     UndefinedParameterVariant(String, String),
     UndefinedCharacter(String),
     UndefinedLanguage(String),
+    UndefinedDiacritic(char),
 
     Redefinition, // attempted to redefine something
+    InvalidDiacriticDef,
+    DiacriticTooLong(String),
     AlreadyDefinedEvolution(String, String),
     NegativeParameterInPhoneme,
     MisplacedWordBoundary,
@@ -47,6 +51,7 @@ impl Display for ParseErrorType {
             Self::ExpectedEOL => write!(f, "Expected end-of-line"),
             Self::ExpectedPhoneme => write!(f, "Expected a phoneme"),
             Self::ExpectedLanguage => write!(f, "Expected a language name"),
+            Self::ExpectedAttribute => write!(f, "Expected an attribute"),
             Self::ExpectedTo => write!(f, "Expected `to`"),
             Self::MissingTarget => write!(f, "There is no target in the environment"),
 
@@ -59,8 +64,19 @@ impl Display for ParseErrorType {
             ),
             Self::UndefinedCharacter(c) => write!(f, "Could not find character `{}`", c),
             Self::UndefinedLanguage(lang) => write!(f, "Could not find language `{}`", lang),
+            Self::UndefinedDiacritic(dia) => write!(f, "Could not find diacritic `◌{}`", dia),
 
             Self::Redefinition => write!(f, "Attempted to redefine something"),
+            Self::InvalidDiacriticDef => write!(
+                f,
+                "Diacritics must be specified as an arbitrary base character followed by the diacritic"
+            ),
+            Self::DiacriticTooLong(dia) => write!(
+                f,
+                "Diacritics must be one character long, `◌{}` has {}",
+                dia,
+                dia.chars().count()
+            ),
             Self::AlreadyDefinedEvolution(input, output) => write!(
                 f,
                 "An evolution from `{}` to `{}` has already been defined",

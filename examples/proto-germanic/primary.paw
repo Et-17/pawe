@@ -55,20 +55,27 @@ characters {
 	v [f +voiced];
 	s [FRICATIVE +place.alveolar];
 	z [s +voiced];
-	h [FRICATIVE +place.velar];
-	ɣ [h +voiced];
+	x [FRICATIVE +place.velar];
+	ɣ [x +voiced];
 	þ [FRICATIVE +place.dental];
 	ð [þ +voiced];
-	LARYNGEAL [FRICATIVE +place.laryngeal];
-	h₁ [LARYNGEAL +pieLaryngeal.neutral];
-	h₂ [LARYNGEAL +pieLaryngeal.aColoring];
-	h₃ [LARYNGEAL +pieLaryngeal.oColoring];
+	h [FRICATIVE +place.laryngeal];
 
 	APPROXIMANT [CONSONANT +manner.approximant +voiced];
 	l [APPROXIMANT +place.alveolar +lateral];
 	r [APPROXIMANT +place.alveolar];
 	y [APPROXIMANT +place.palatal];
 	w [APPROXIMANT +place.velar +labialized];
+}
+
+diacritics {
+	H₁ +pieLaryngeal.neutral;
+	H₂ +pieLaryngeal.aColoring;
+	H₃ +pieLaryngeal.oColoring;
+
+	Cʰ +aspirated;
+	Cʷ +labialized;
+	n̩ +syllabic;
 }
 
 // Establish necessary information for vowels
@@ -87,71 +94,20 @@ characters {
 	V [+type.vowel -rounded +syllabic +length.short -stressed -nasalized];
 
 	a [V +height.open +backness.central];
-	ą [a +nasalized];
-	á [a +stressed];
-	ā [a +length.long];
-	ą̄ [ā +nasalized];
-	ā́ [a +length.long +stressed];
-	â [a +length.overlong];
-	ą̂ [â +nasalized];
-
 	ɑ [V +height.open +backness.back];
-	ɑ̨ [ɑ +nasalized];
-	ɑ́ [ɑ +stressed];
-	ɑ̄ [ɑ +length.long];
-	ɑ̨̄ [ɑ̄ +nasalized];
-	ɑ̄́ [ɑ +length.long +stressed];
-	ɑ̂ [ɑ +length.overlong];
-	ɑ̨̂ [ɑ̂ +nasalized];
-
 	i [V +height.close +backness.front];
-	į [i +nasalized];
-	í [i +stressed];
-	ī [i +length.long];
-	į̄ [ī +nasalized];
-	ī́ [i +length.long +stressed];
-	î [i +length.overlong];
-	į̂ [î +nasalized];
-	ĭ [i -syllabic];
-
 	u [V +height.close +backness.back +rounded];
-	ų [u +nasalized];
-	ú [u +stressed];
-	ū [u +length.long];
-	ų̄ [ū +nasalized];
-	ū́ [u +length.long +stressed];
-	û [u +length.overlong];
-	ų̂ [û +nasalized];
-	ŭ [u -syllabic];
-
 	e [V +height.close_mid +backness.front];
-	ę [e +nasalized];
-	é [e +stressed];
-	ē [e +length.long];
-	ę̄ [ē +nasalized];
-	ḗ [e +length.long +stressed];
-	ê [e +length.overlong];
-	ę̂ [ê +nasalized];
-
 	o [V +height.close_mid +backness.back +rounded];
-	ǫ [o +nasalized];
-	ó [o +stressed];
-	ō [o +length.long];
-	ǭ [ō +nasalized];
-	ṓ [o +length.long +stressed];
-	ô [o +length.overlong];
-	ǫ̂ [ô +nasalized];
-
 	ɔ [V +height.open_mid +backness.back +rounded];
-	ɔ̨ [ɔ +nasalized];
-	ɔ́ [ɔ +stressed];
-	ɔ̄ [ɔ +length.long];
-	ɔ̨̄ [ɔ̄ +nasalized];
-	ɔ̄́ [ɔ +length.long +stressed];
-	ɔ̂ [ɔ +length.overlong];
-	ɔ̨̂ [ɔ̂ +nasalized];
-
 	ə [V +height.mid +backness.central];
+}
+
+diacritics {
+	ó +stressed;
+	ō +length.long;
+	ô +length.overlong;
+	ǫ +nasalized;
 }
 
 // Establish rules for evolution
@@ -165,7 +121,9 @@ evolve ProtoIndoEuropean to PreProtoGermanic {
 	e > o / _ h₃;
 
 	// Merging of PIE palatovelar and velar plosives
-	1(+place.palatovelar +manner.plosive) > [1 +place.velar];
+	// Because we need ◌́ to represent stress, and we can't specify different
+	// diacritic interpretations yet, palatovelars are just stressed velars.
+	1(+place.velar +stressed +manner.plosive) > [1 -stressed];
 
 	// Epenthesis of /u/ before syllabic sonorants
 	1(+type.consonant +syllabic) > u [1 -syllabic];
@@ -267,7 +225,7 @@ evolve EarlyProtoGermanic to LateProtoGermanic {
 	1(+type.vowel -stressed) n > [1 +nasalized] / _ #;
 
 	// Nasal /ẽː/ is lowered to /ɑ̃ː/
-	ę̄ > ɑ̨̄;
+	ę̄ > ɑ̨̄;
 
 	// Elimination of /ə/
 	ə > / (+type.consonant) _ (+type.consonant);

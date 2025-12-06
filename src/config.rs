@@ -1,7 +1,7 @@
 use itertools::Itertools;
 
 use crate::evolution::Rule;
-use crate::phonemes::Phoneme;
+use crate::phonemes::{Attribute, Phoneme};
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::rc::Rc;
@@ -206,11 +206,68 @@ impl Into<Phoneme> for Character {
 }
 
 #[derive(Debug, Default)]
+pub struct DiacriticMap {
+    feature_encoding_map: HashMap<(bool, Label), char>,
+    parameter_encoding_map: HashMap<(bool, Label, Label), char>,
+    decoding_map: HashMap<char, Attribute>,
+}
+
+impl DiacriticMap {
+    pub fn encode(&self, attribute: &Attribute) -> Option<&char> {
+        match attribute {
+            Attribute::Feature(mark, feat) => self.feature_encoding_map.get(&(*mark, feat.clone())),
+            Attribute::Parameter(mark, param, variant) => {
+                self.parameter_encoding_map
+                    .get(&(*mark, param.clone(), variant.clone()))
+            }
+            _ => None,
+        }
+    }
+
+    fn encode_feature(&self, mark: bool, feature: Label) -> Option<char> {
+        self.feature_encoding_map.get(&(mark, feature)).copied()
+    }
+
+    fn encode_parameter(&self, mark: bool, parameter: Label, variant: Label) -> Option<char> {
+        self.parameter_encoding_map
+            .get(&(mark, parameter, variant))
+            .copied()
+    }
+
+    pub fn decode(&self, diacritic: char) -> Option<&Attribute> {
+        self.decoding_map.get(&diacritic)
+    }
+
+    // Returns Ok(()) if the add was successful, but Err(()) if the diacritic
+    // already existed or the attribute is not a valid type
+    pub fn add(&mut self, diacritic: char, attribute: Attribute) -> Result<(), ()> {
+        if self.decoding_map.get(&diacritic).is_some() {
+            return Err(());
+        }
+
+        match attribute.clone() {
+            Attribute::Feature(mark, feat) => {
+                self.feature_encoding_map.insert((mark, feat), diacritic)
+            }
+            Attribute::Parameter(mark, param, variant) => self
+                .parameter_encoding_map
+                .insert((mark, param, variant), diacritic),
+            _ => return Err(()),
+        };
+
+        self.decoding_map.insert(diacritic, attribute);
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Default)]
 pub struct Config {
     pub languages: LabelEncoding,
     pub features: LabelEncoding,
     pub parameters: ParameterEncoding,
     pub characters: HashMap<String, Character>,
+    pub diacritics: DiacriticMap,
     pub evolutions: HashMap<Label, HashMap<Label, Vec<Rule>>>,
     pub first_language: Option<String>,
     pub last_language: Option<String>,
