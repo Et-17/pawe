@@ -36,7 +36,7 @@ features {
 }
 
 characters {
-	CONSONANT [+type.consonant +length.short -lateral -labialized -voiced -syllabic -stressed];
+	CONSONANT [+type.consonant +length.short -lateral -labialized -voiced -aspirated -syllabic -stressed];
 	
 	NASAL [CONSONANT +manner.nasal +voiced];
 	m [NASAL +place.bilabial];
@@ -115,10 +115,10 @@ diacritics {
 
 evolve ProtoIndoEuropean to PreProtoGermanic {
 	// Allophonic colouring of /e/ adjacent to laryngeal consonants
-	e > a / h₂ _;
-	e > a / _ h₂;
-	e > o / h₃ _;
-	e > o / _ h₃;
+	1(+height.close_mid +backness.front) > [1 +height.open +backness.central] / h₂ _;
+	1(+height.close_mid +backness.front) > [1 +height.open +backness.central] / _ h₂;
+	1(+height.close_mid +backness.front) > [1 +backness.back +rounded] / h₃ _;
+	1(+height.close_mid +backness.front) > [1 +backness.back +rounded] / _ h₃;
 
 	// Merging of PIE palatovelar and velar plosives
 	// Because we need ◌́ to represent stress, and we can't specify different
@@ -176,7 +176,7 @@ evolve PreProtoGermanic to EarlyProtoGermanic {
 	1(+type.consonant -voiced +manner.plosive) > [1 +manner.fricative] / (-manner.plosive -manner.fricative) _;
 	1(+type.consonant -voiced +manner.plosive) > [1 +manner.fricative] / # _;
 	// Voiced plosives are devoiced
-	1(+type.consonant +voiced +manner.plosive) > [1 -voiced];
+	1(+type.consonant +voiced +manner.plosive -aspirated) > [1 -voiced];
 	// Aspirated plosives become voiced plosives, fricatives between vowels
 	1(+type.consonant +voiced +manner.plosive +aspirated) > [1 -aspirated +manner.fricative] / (+type.vowel) _ (+type.vowel);
 	1(+type.consonant +voiced +manner.plosive +aspirated) > [1 -aspirated];

@@ -61,6 +61,10 @@ pub struct EvolutionOutputArgs {
     #[arg(short, long)]
     pub no_stages: bool,
 
+    /// Show the rule being applied, preceeded with `//`
+    #[arg(long, conflicts_with = "no_stages")]
+    pub show_rules: bool,
+
     /// Output the result after applying rules that change the word instead of
     /// just after each language stage
     #[arg(long, conflicts_with = "no_stages")]

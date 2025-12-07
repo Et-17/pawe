@@ -2,6 +2,7 @@ use std::fmt::Display;
 
 use crate::cli::TreeNode;
 use crate::cli::arg_parser::EvolutionOutputArgs;
+use crate::evolution::Rule;
 use crate::phonemes::Phoneme;
 
 pub fn display_label<T: Display>(text: T, args: &EvolutionOutputArgs) {
@@ -46,10 +47,29 @@ pub fn display_word_stage(word: &[Phoneme], first: bool, args: &EvolutionOutputA
     }
 }
 
-pub fn display_application(word: &[Phoneme], changed: bool, args: &EvolutionOutputArgs) {
+fn display_rule(rule: &Rule, args: &EvolutionOutputArgs) {
+    if !args.show_rules && !args.csv {
+        return;
+    }
+
+    if !args.no_labels {
+        print!("    ");
+    }
+
+    println!("// {}", rule);
+}
+
+pub fn display_application(
+    word: &[Phoneme],
+    changed: bool,
+    rule: &Rule,
+    args: &EvolutionOutputArgs,
+) {
     if !changed && !args.show_all_rules {
         return;
     }
+
+    display_rule(rule, args);
 
     if args.show_changes {
         display_word_stage(word, false, args);

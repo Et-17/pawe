@@ -145,9 +145,9 @@ fn do_evolution_step(
     for rule in rules {
         if let Some(new_word) = do_rule(&word, &rule, &config.characters, &config.diacritics) {
             word = new_word;
-            output::display_application(&word, true, args);
+            output::display_application(&word, true, rule, args);
         } else {
-            output::display_application(&word, false, args);
+            output::display_application(&word, false, rule, args);
         }
     }
 
