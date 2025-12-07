@@ -143,7 +143,7 @@ fn do_evolution_step(
     let rules = config.evolutions.get(start).unwrap().get(end).unwrap();
 
     for rule in rules {
-        if let Some(new_word) = do_rule(&word, &rule, &config.characters) {
+        if let Some(new_word) = do_rule(&word, &rule, &config.characters, &config.diacritics) {
             word = new_word;
             output::display_application(&word, true, args);
         } else {
@@ -175,7 +175,7 @@ fn tree(args: TreeArgs, config_args: ConfigArgs) -> ResultV<()> {
 
 fn no_display_evolution_step(word: Vec<Phoneme>, rules: &[Rule], config: &Config) -> Vec<Phoneme> {
     rules.iter().fold(word, |w, rule| {
-        do_rule(&w, &rule, &config.characters).unwrap_or(w)
+        do_rule(&w, &rule, &config.characters, &config.diacritics).unwrap_or(w)
     })
 }
 

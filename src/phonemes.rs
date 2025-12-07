@@ -4,7 +4,7 @@ use std::fmt::{Debug, Display};
 use itertools::Itertools;
 
 use crate::cli::NO_BASE;
-use crate::config::{Character, Label};
+use crate::config::{Character, CharacterDefinition, DiacriticMap, Label};
 
 pub type SelectorCode = u8;
 
@@ -15,6 +15,7 @@ pub enum Attribute {
     Character(Character),
     Selection(SelectorCode),
     Phoneme(Phoneme),
+    Display(String), // just a pass through for displaying atoms
 }
 
 impl Attribute {
@@ -44,6 +45,7 @@ impl Display for Attribute {
             Attribute::Character(definition) => write!(f, "{}", definition.symbol),
             Attribute::Selection(code) => write!(f, "{}", code),
             Attribute::Phoneme(phoneme) => write!(f, "{}", phoneme),
+            Attribute::Display(display) => write!(f, "{}", display),
         }
     }
 }
@@ -52,26 +54,23 @@ impl Display for Attribute {
 pub struct Phoneme {
     pub features: HashMap<Label, bool>,
     pub parameters: HashMap<Label, Label>,
-    pub base: Option<Character>,
+    pub base: Option<Box<CharacterDefinition>>,
 }
 
 impl Phoneme {
-    pub fn new(base: Option<Character>) -> Self {
+    pub fn new(base: Option<CharacterDefinition>) -> Self {
         Self {
             features: HashMap::new(),
             parameters: HashMap::new(),
-            base,
+            base: base.map(Box::new),
         }
     }
 
     pub fn add_character(&mut self, character: Character) -> () {
-        // We have to clone before inserting the new character because if we
-        // add the phoneme before inserting the character, it will take whatever
-        // the new character's base is as this phonemes base, and won't take
-        // the character as the new base.
-        let phoneme = character.phoneme.clone();
-        self.base.get_or_insert(character);
-        self.add_phoneme(phoneme);
+        if self.base.is_none() {
+            self.set_base(&character);
+        }
+        self.add_phoneme(character.phoneme.clone());
     }
 
     // Adds all the attributes from the given phoneme to this phoneme, so that
@@ -79,9 +78,6 @@ impl Phoneme {
     pub fn add_phoneme(&mut self, phoneme: Phoneme) -> () {
         self.features.extend(phoneme.features);
         self.parameters.extend(phoneme.parameters);
-        if let Some(new_base) = phoneme.base {
-            self.base.get_or_insert(new_base);
-        }
     }
 
     // This function will discard selector references and negative parameters
@@ -96,10 +92,10 @@ impl Phoneme {
             Attribute::Character(definition) => {
                 self.add_character(definition);
             }
-            Attribute::Selection(_) => (),
             Attribute::Phoneme(phoneme) => {
                 self.add_phoneme(phoneme);
             }
+            _ => (),
         }
     }
 
@@ -127,7 +123,7 @@ impl Phoneme {
 
         let mut attrs = Vec::new();
         if !no_base && let Some(ref base_value) = self.base {
-            attrs.push(Attribute::Character(base_value.clone()));
+            attrs.push(Attribute::Display(base_value.symbol.clone()));
         }
 
         for (param, self_value) in self.parameters.iter() {
@@ -162,16 +158,52 @@ impl Phoneme {
     }
 
     // Goes through the available characters and tries to find a base that would
-    // require less modification than the current base.
-    pub fn rebase(self, characters: &HashMap<String, Character>) -> Self {
-        if let Some(new_base) = self.best_base(characters) {
-            Self {
-                base: Some(new_base.clone()),
-                ..self
-            }
-        } else {
-            self
+    // require less modification than the current base. This will not act if
+    // --no-base is set, because it won't have an effect anyway.
+    pub fn rebase(
+        mut self,
+        characters: &HashMap<String, Character>,
+        diacritics: &DiacriticMap,
+    ) -> Self {
+        if unsafe { NO_BASE } {
+            return self;
         }
+
+        if let Some(new_base) = self.best_base(characters) {
+            self.set_base(&new_base);
+            let mods = self.necessary_modifications(&new_base.phoneme);
+            self.integrate_modifications(mods, diacritics);
+        }
+        self
+    }
+
+    fn set_base(&mut self, base: &CharacterDefinition) {
+        let mut new_base = base.clone();
+        new_base.phoneme.base = None;
+        self.base = Some(Box::new(new_base));
+    }
+
+    // Filters out and applies the given modifications that could be a diacritic
+    fn integrate_modifications(
+        &mut self,
+        mods: impl IntoIterator<Item = Attribute>,
+        diacritics: &DiacriticMap,
+    ) -> Vec<Attribute> {
+        let Some(ref mut base) = self.base else {
+            return mods.into_iter().collect_vec();
+        };
+
+        mods.into_iter()
+            .filter_map(|attr| {
+                if let Some(dia) = diacritics.encode(&attr) {
+                    base.symbol.push(*dia);
+                    base.phoneme.add_attribute(attr);
+                    None
+                } else {
+                    Some(attr)
+                }
+            })
+            .collect_vec()
     }
 
     // Finds the best base for the phoneme
@@ -179,7 +211,6 @@ impl Phoneme {
         characters
             .values()
             .map(|c| (c, self.count_necessary_modifications(&c.phoneme)))
-            .take_while_inclusive(|(_, mods)| *mods != 0)
             .min_by_key(|(_, mods)| *mods)
             .map(|(c, _)| c)
     }
@@ -187,28 +218,23 @@ impl Phoneme {
     // Counts the necessary modifications in order to represent this phoneme in
     // terms of the given base.
     fn count_necessary_modifications(&self, base: &Phoneme) -> usize {
-        // self.parameters.iter().filter(|(param, self_val)| base.parameters.get())
-        let phoneme_mods = self
-            .parameters
-            .iter()
-            .filter(|(param, self_val)| {
-                base.parameters
-                    .get(param)
-                    .is_none_or(|base_val| **self_val != *base_val)
-            })
-            .count();
+        let feature_mods = divergences(&self.features, &base.features).count();
 
-        let features_mods = self
-            .features
-            .iter()
-            .filter(|(feat, self_val)| {
-                base.features
-                    .get(feat)
-                    .is_none_or(|base_val| **self_val != *base_val)
-            })
-            .count();
+        let parameter_mods = divergences(&self.parameters, &base.parameters).count();
 
-        phoneme_mods + features_mods
+        feature_mods + parameter_mods
+    }
+
+    // Gets the necessary modifications in order to represent this phoneme in
+    // terms of the given base.
+    fn necessary_modifications(&self, base: &Phoneme) -> Vec<Attribute> {
+        let feature_mods = divergences(&self.features, &base.features)
+            .map(|(feat, mark)| Attribute::Feature(mark.clone(), feat.clone()));
+
+        let parameter_mods = divergences(&self.parameters, &base.parameters)
+            .map(|(param, variant)| Attribute::Parameter(true, param.clone(), variant.clone()));
+
+        feature_mods.chain(parameter_mods).collect_vec()
     }
 }
 
@@ -231,7 +257,7 @@ impl Display for Phoneme {
             return write!(f, "EMPTY=PHONEME");
         }
         if attrs.len() == 1 {
-            if let Attribute::Character(character) = &attrs[0] {
+            if let Attribute::Display(character) = &attrs[0] {
                 return write!(f, "{}", character);
             }
         }
@@ -372,4 +398,16 @@ impl Display for Filter {
 
 fn mark_char(mark: bool) -> char {
     if mark { '+' } else { '-' }
+}
+
+// Get the key/value pairs in HashMap `target` that either do not exist or
+// aren't the same in HashMap `base`
+fn divergences<'a, K: Eq + std::hash::Hash, V: PartialEq>(
+    target: &'a HashMap<K, V>,
+    base: &'a HashMap<K, V>,
+) -> impl Iterator<Item = (&'a K, &'a V)> {
+    target.iter().filter(|(key, target_val)| {
+        base.get(key)
+            .is_none_or(|base_val| *base_val != **target_val)
+    })
 }

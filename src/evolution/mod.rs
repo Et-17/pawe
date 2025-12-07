@@ -1,6 +1,6 @@
 use itertools::PeekingNext;
 
-use crate::config::Character;
+use crate::config::{Character, DiacriticMap};
 use crate::phonemes::{Filter, Phoneme, Selector, SelectorCode, UnboundPhoneme};
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
@@ -116,15 +116,16 @@ pub fn do_rule<'a>(
     word: &[Phoneme],
     rule: &Rule,
     character_table: &HashMap<String, Character>,
+    diacritic_table: &DiacriticMap,
 ) -> Option<Vec<Phoneme>> {
-    _do_rule(&word, rule, character_table, 0)
+    _do_rule(&word, rule, character_table, diacritic_table, 0)
 }
 
 fn _do_rule<'a>(
-    // word: Vec<Phoneme>,
     word: &[Phoneme],
     rule: &Rule,
     character_table: &HashMap<String, Character>,
+    diacritic_table: &DiacriticMap,
     start: usize,
 ) -> Option<Vec<Phoneme>> {
     // If we reach the end of the word, stop
@@ -140,12 +141,14 @@ fn _do_rule<'a>(
         }
     }
 
-    match do_rule_from_pos(&word, rule, character_table, start) {
-        Some(new_word) => match _do_rule(&new_word, rule, character_table, start + 1) {
-            Some(new_word2) => Some(new_word2),
-            None => Some(new_word),
-        },
-        None => _do_rule(word, rule, character_table, start + 1),
+    match do_rule_from_pos(&word, rule, character_table, diacritic_table, start) {
+        Some(new_word) => {
+            match _do_rule(&new_word, rule, character_table, diacritic_table, start + 1) {
+                Some(new_word2) => Some(new_word2),
+                None => Some(new_word),
+            }
+        }
+        None => _do_rule(word, rule, character_table, diacritic_table, start + 1),
     }
 }
 
@@ -155,6 +158,7 @@ fn do_rule_from_pos<'a>(
     word: &[Phoneme],
     rule: &Rule,
     character_table: &HashMap<String, Character>,
+    diacritic_table: &DiacriticMap,
     start: usize,
 ) -> Option<Vec<Phoneme>> {
     // Preënvironment
@@ -186,6 +190,7 @@ fn do_rule_from_pos<'a>(
         &word[end_input..],
         &selection_table,
         character_table,
+        diacritic_table,
     ))
 }
 
@@ -195,12 +200,18 @@ fn modify_word(
     post: &[Phoneme],
     selection_table: &HashMap<SelectorCode, &Phoneme>,
     character_table: &HashMap<String, Character>,
+    diacritic_table: &DiacriticMap,
 ) -> Vec<Phoneme> {
     // Clones galore! May the Omnissiah grant me the ability to be gentler with
     // the memories of Its Machine Spirits.
     pre.iter()
         .cloned()
-        .chain(bind_output(rule_output, selection_table, character_table))
+        .chain(bind_output(
+            rule_output,
+            selection_table,
+            character_table,
+            diacritic_table,
+        ))
         .chain(post.iter().cloned())
         .collect()
 }
@@ -209,11 +220,12 @@ fn bind_output(
     rule_output: &[UnboundPhoneme],
     selection_table: &HashMap<SelectorCode, &Phoneme>,
     character_table: &HashMap<String, Character>,
+    diacritic_table: &DiacriticMap,
 ) -> impl Iterator<Item = Phoneme> {
     rule_output
         .iter()
         .map(|up| up.bind(selection_table))
-        .map(|p| p.rebase(character_table))
+        .map(|p| p.rebase(character_table, diacritic_table))
 }
 
 // Word boundary matching is not performed by this function, that must be

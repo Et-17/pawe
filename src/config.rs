@@ -224,16 +224,6 @@ impl DiacriticMap {
         }
     }
 
-    fn encode_feature(&self, mark: bool, feature: Label) -> Option<char> {
-        self.feature_encoding_map.get(&(mark, feature)).copied()
-    }
-
-    fn encode_parameter(&self, mark: bool, parameter: Label, variant: Label) -> Option<char> {
-        self.parameter_encoding_map
-            .get(&(mark, parameter, variant))
-            .copied()
-    }
-
     pub fn decode(&self, diacritic: char) -> Option<&Attribute> {
         self.decoding_map.get(&diacritic)
     }

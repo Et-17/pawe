@@ -52,6 +52,11 @@ fn parse_unwrapped_word(
         }
     }
 
+    let phonemes = phonemes
+        .into_iter()
+        .map(|p| p.rebase(&config.characters, &config.diacritics))
+        .collect();
+
     check_errors(phonemes, errors)
 }
 
