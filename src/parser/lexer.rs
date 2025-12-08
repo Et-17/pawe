@@ -8,7 +8,7 @@ use std::rc::Rc;
 use itertools::{Itertools, PeekingNext};
 use unicode_normalization::UnicodeNormalization;
 
-use crate::cli::NO_NORMALIZE;
+use crate::cli::RAW_INPUT;
 use crate::error_handling::{FilePosition, Result, wrap_io_error};
 use crate::phonemes::SelectorCode;
 
@@ -35,7 +35,7 @@ impl<T: BufRead> Lexer<T> {
         self.line_num += 1;
 
         let chars = next_line.chars().enumerate();
-        if unsafe { !NO_NORMALIZE } {
+        if unsafe { !RAW_INPUT } {
             let decomposed =
                 chars.flat_map(|(column, raw)| raw.nfd().map(move |dec| (column, dec)));
 

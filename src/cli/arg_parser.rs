@@ -14,12 +14,12 @@ pub struct Cli {
 
     /// Always write out all attributes of phonemes instead of reducing them to
     /// a base character
-    #[arg(long, global = true)]
+    #[arg(long, global = true, help_heading = "Output")]
     pub no_base: bool,
 
-    /// Don't normalize the input or output
-    #[arg(long, global = true)]
-    pub no_normalization: bool,
+    /// Don't normalize the input
+    #[arg(long, global = true, help_heading = "Configuration")]
+    pub raw_input: bool,
 }
 
 #[derive(Subcommand, Debug)]
@@ -36,7 +36,13 @@ pub enum Command {
 #[derive(Args, Debug)]
 pub struct ConfigArgs {
     /// Specify entry configuration file or the directory to search in
-    #[arg(short = 'C', long, value_name = "path", global = true)]
+    #[arg(
+        short = 'C',
+        long,
+        value_name = "path",
+        global = true,
+        help_heading = "Configuration"
+    )]
     pub config: Option<PathBuf>,
 }
 
@@ -60,6 +66,7 @@ pub struct EvolveArgs {
 }
 
 #[derive(Args, Debug)]
+#[command(next_help_heading = "Output")]
 pub struct EvolutionOutputArgs {
     /// Only output the final result
     #[arg(short, long)]

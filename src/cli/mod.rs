@@ -20,7 +20,7 @@ mod output;
 const EXPECTED_PRIMARY_CONFIG_NAME: &str = "primary.paw";
 
 pub static mut NO_BASE: bool = false;
-pub static mut NO_NORMALIZE: bool = false;
+pub static mut RAW_INPUT: bool = false;
 
 #[derive(Debug)]
 pub enum CliErrorType {
@@ -57,7 +57,7 @@ pub fn do_cli() -> ResultV<()> {
         // having to jam them around the program and use things like custom
         // display traits to take parameters
         NO_BASE = args.no_base;
-        NO_NORMALIZE = args.no_normalization;
+        RAW_INPUT = args.raw_input;
     }
 
     match args.command {
