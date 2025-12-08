@@ -45,14 +45,34 @@ In the input of a rule, you can put a number in front of a filter to turn it int
 
 ## Characters
 
-To allow more clear, natural, and concise specifications, Pawe lets you specify characters for certain phonemes. While they're called characters, they don't necessarily need to be one Unicode codepoint, and can be any Unicode string that does not contain any character in `{}()[]/>*?!;`. After defining a character, you can use it anywhere where you could use a phoneme, or pass it into an atom for modification. You can define characters in a `characters` block like this:
+To allow more natural, and concise specifications, Pawe lets you specify characters for certain phonemes, and then specify single character diacritics for individual attributes. While they're called characters, they don't necessarily need to be one Unicode codepoint, and can be any Unicode string that does not contain any character in `{}()[]/>*?!;` or a defined diacritic. After defining a character, you can use it anywhere where you can use a phoneme, or pass it into an atom for modification. You can define characters in a `characters` block like this:
 
     characters {
         t [+type.consonant +place.alveolar +manner.plosive -voiced];
         u [+type.vowel +height.close +backness.back +rounded];
     }
 
-Defining characters also helps improve the output of Pawe, because it can automatically represent phonemes as an character or find the best character to modify. In this case, optimal means the least amount of additional attributes. There is no guarantee of how ties will be broken, or that the order will be the same in every invocation of the program.
+Defining characters also helps improve the output of Pawe, because it can automatically represent phonemes as a character with diacritics or find the best character to modify. In this case, optimal means the least amount of additional attributes. There is no guarantee of how ties will be broken, or that the order will be the same in every invocation of the program.
+
+### Diacritics
+
+In addition to characters, you can define diacritics that can be suffixed to characters to modify them. You can use as many diacritics on a given character as you want, and inputs are automatically decomposed so the diacritics in precomposed characters will still be processed. Diacritics can be any single Unicode character after NFD normalization. While this does include combining diacritics, like `◌́`, it also includes non-combining characters, like `ː` or `ʰ`.
+
+Diacritics are defined in a `diacritics` block and must be preceeded by an arbitrary single Unicode character (after NFD normalization) to make combining diacritics easier to define. For example, if you wanted to use `◌́` to represent a stressed phoneme and `ː` to represent a long phoneme, you could write 
+
+    diacritics {
+        ó +stressed;
+        oː +length.long;
+    }
+
+Note that we used `o` as the base character, but we could just have easily have used anything else. We could've also written
+
+    diacritics {
+        ź +stressed;
+        zː +length.long;
+    }
+
+When preparing diacritics for display, PAWE will maintain the order in which diacritics are defined in the configuration, and then apply NFC normalization.
 
 ## Languages
 
