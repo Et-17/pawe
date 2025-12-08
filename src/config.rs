@@ -207,13 +207,14 @@ impl Into<Phoneme> for Character {
 
 #[derive(Debug, Default)]
 pub struct DiacriticMap {
-    feature_encoding_map: HashMap<(bool, Label), char>,
-    parameter_encoding_map: HashMap<(bool, Label, Label), char>,
+    feature_encoding_map: HashMap<(bool, Label), (char, LabelCode)>,
+    parameter_encoding_map: HashMap<(bool, Label, Label), (char, LabelCode)>,
     decoding_map: HashMap<char, Attribute>,
+    next_precedence: LabelCode,
 }
 
 impl DiacriticMap {
-    pub fn encode(&self, attribute: &Attribute) -> Option<&char> {
+    pub fn encode(&self, attribute: &Attribute) -> Option<(char, LabelCode)> {
         match attribute {
             Attribute::Feature(mark, feat) => self.feature_encoding_map.get(&(*mark, feat.clone())),
             Attribute::Parameter(mark, param, variant) => {
@@ -222,6 +223,7 @@ impl DiacriticMap {
             }
             _ => None,
         }
+        .cloned()
     }
 
     pub fn decode(&self, diacritic: char) -> Option<&Attribute> {
@@ -235,19 +237,42 @@ impl DiacriticMap {
             return Err(());
         }
 
+        // The diacritic bundled with its display order precedence
+        let encoded = (diacritic, self.next_precedence);
+
         match attribute.clone() {
             Attribute::Feature(mark, feat) => {
-                self.feature_encoding_map.insert((mark, feat), diacritic)
+                self.feature_encoding_map.insert((mark, feat), encoded)
             }
             Attribute::Parameter(mark, param, variant) => self
                 .parameter_encoding_map
-                .insert((mark, param, variant), diacritic),
+                .insert((mark, param, variant), encoded),
             _ => return Err(()),
         };
+        self.next_precedence += 1;
 
         self.decoding_map.insert(diacritic, attribute);
 
         Ok(())
+    }
+
+    // Filters the attributes that could possibly be turned into a diacritic
+    // from the given iterator, and then orders them
+    pub fn find_possible_diacritics(
+        &self,
+        attributes: impl Iterator<Item = Attribute>,
+    ) -> Vec<(char, Attribute)> {
+        let mut p_dias = attributes
+            .filter_map(|attr| Some((self.encode(&attr)?, attr)))
+            .collect_vec();
+
+        p_dias.sort_unstable_by_key(|p_dia| p_dia.0.1);
+        let dia_pairs = p_dias
+            .into_iter()
+            .map(|((dia, _), attr)| (dia, attr))
+            .collect();
+
+        dia_pairs
     }
 }
 

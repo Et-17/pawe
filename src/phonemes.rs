@@ -183,27 +183,21 @@ impl Phoneme {
         self.base = Some(Box::new(new_base));
     }
 
-    // Filters out and applies the given modifications that could be a diacritic
     fn integrate_modifications(
         &mut self,
         mods: impl IntoIterator<Item = Attribute>,
         diacritics: &DiacriticMap,
-    ) -> Vec<Attribute> {
+    ) {
         let Some(ref mut base) = self.base else {
-            return mods.into_iter().collect_vec();
+            return;
         };
 
-        mods.into_iter()
-            .filter_map(|attr| {
-                if let Some(dia) = diacritics.encode(&attr) {
-                    base.symbol.push(*dia);
-                    base.phoneme.add_attribute(attr);
-                    None
-                } else {
-                    Some(attr)
-                }
-            })
-            .collect_vec()
+        let new_dia_pairs = diacritics.find_possible_diacritics(mods.into_iter());
+
+        for (diacritic, attribute) in new_dia_pairs {
+            base.symbol.push(diacritic);
+            base.phoneme.add_attribute(attribute);
+        }
     }
 
     // Finds the best base for the phoneme

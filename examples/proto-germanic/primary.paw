@@ -73,6 +73,12 @@ diacritics {
 	H₂ +pieLaryngeal.aColoring;
 	H₃ +pieLaryngeal.oColoring;
 
+	ō +length.long;
+	ô +length.overlong;
+	// Because pawe can't yet have diacritics mean different things, we will be
+	// using +stressed to represent palatoovelars
+	ó +stressed;
+
 	Cʰ +aspirated;
 	Cʷ +labialized;
 	n̩ +syllabic;
@@ -104,9 +110,6 @@ characters {
 }
 
 diacritics {
-	ó +stressed;
-	ō +length.long;
-	ô +length.overlong;
 	ǫ +nasalized;
 }
 
