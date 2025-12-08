@@ -32,7 +32,7 @@ pub enum Command {
 #[derive(Args, Debug)]
 pub struct ConfigArgs {
     /// Specify entry configuration file or the directory to search in
-    #[arg(short, long, value_name = "path", global = true)]
+    #[arg(short = 'C', long, value_name = "path", global = true)]
     pub config: Option<PathBuf>,
 }
 
@@ -62,18 +62,18 @@ pub struct EvolutionOutputArgs {
     pub no_stages: bool,
 
     /// Show the rule being applied, preceeded with `//`
-    #[arg(long, conflicts_with = "no_stages")]
-    pub show_rules: bool,
+    #[arg(short, long, conflicts_with = "no_stages")]
+    pub display_rules: bool,
 
     /// Output the result after applying rules that change the word instead of
     /// just after each language stage
-    #[arg(long, conflicts_with = "no_stages")]
-    pub show_changes: bool,
+    #[arg(short = 'c', long, conflicts_with = "no_stages")]
+    pub changes: bool,
 
     /// Output the result after applying every rule, including ones that don't
     /// change the word
-    #[arg(long, requires = "show_changes")]
-    pub show_all_rules: bool,
+    #[arg(short, long, conflicts_with = "changes")]
+    pub all_results: bool,
 
     /// Don't label the different stages
     #[arg(long, conflicts_with = "no_stages")]

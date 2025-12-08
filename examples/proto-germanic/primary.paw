@@ -187,8 +187,8 @@ evolve PreProtoGermanic to EarlyProtoGermanic {
 	1(+manner.fricative -voiced) > [1 +voiced] / (+type.vowel -stressed) (+manner.approximant) _;
 
 	// All words become stressed on their first syllable
-	1(+syllabic) > [1 -stressed];
-	1(+syllabic) > [1 +stressed] / # (-type.vowel)* _;
+	1(+syllabic +stressed) > [1 -stressed] / (+syllabic) (-syllabic)* _;
+	1(+syllabic -stressed) > [1 +stressed] / # (-syllabic)* _;
 
 	// Unstressed /owo/ > /oː/
 	o w o > [o +length.overlong];
