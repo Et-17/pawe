@@ -14,7 +14,7 @@ pub fn display_label<T: Display>(text: T, args: &EvolutionOutputArgs) {
 }
 
 pub fn display_evolution_label<T: Display>(start: &T, end: &T, args: &EvolutionOutputArgs) {
-    if args.changes {
+    if args.changes || args.all_results {
         display_label(format_args!("Evolving from {start} to {end}"), args);
     } else {
         display_label(format_args!("{end}"), args);
@@ -48,7 +48,7 @@ pub fn display_word_stage(word: &[Phoneme], first: bool, args: &EvolutionOutputA
 }
 
 fn display_rule(rule: &Rule, args: &EvolutionOutputArgs) {
-    if !args.display_rules && !args.csv {
+    if !args.display_rules || args.csv {
         return;
     }
 
@@ -71,7 +71,7 @@ pub fn display_application(
 
     display_rule(rule, args);
 
-    if args.changes {
+    if args.changes || args.all_results {
         display_word_stage(word, false, args);
     }
 }
