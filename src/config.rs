@@ -226,6 +226,18 @@ impl DiacriticMap {
         .cloned()
     }
 
+    pub fn has_attribute(&self, attribute: &Attribute) -> bool {
+        match attribute {
+            Attribute::Feature(mark, feat) => self
+                .feature_encoding_map
+                .contains_key(&(*mark, feat.clone())),
+            Attribute::Parameter(mark, param, variant) => self
+                .parameter_encoding_map
+                .contains_key(&(*mark, param.clone(), variant.clone())),
+            _ => false,
+        }
+    }
+
     pub fn decode(&self, diacritic: char) -> Option<&Attribute> {
         self.decoding_map.get(&diacritic)
     }

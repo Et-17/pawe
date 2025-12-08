@@ -169,7 +169,7 @@ impl Phoneme {
             return self;
         }
 
-        if let Some(new_base) = self.best_base(characters) {
+        if let Some(new_base) = self.best_base(characters, diacritics) {
             self.set_base(&new_base);
             let mods = self.necessary_modifications(&new_base.phoneme);
             self.integrate_modifications(mods, diacritics);
@@ -201,22 +201,25 @@ impl Phoneme {
     }
 
     // Finds the best base for the phoneme
-    fn best_base<'a>(&self, characters: &'a HashMap<String, Character>) -> Option<&'a Character> {
+    fn best_base<'a>(
+        &self,
+        characters: &'a HashMap<String, Character>,
+        diacritics: &DiacriticMap,
+    ) -> Option<&'a Character> {
         characters
             .values()
-            .map(|c| (c, self.count_necessary_modifications(&c.phoneme)))
+            .map(|c| (c, self.mismatch_with(&c.phoneme, diacritics)))
             .min_by_key(|(_, mods)| *mods)
             .map(|(c, _)| c)
     }
 
     // Counts the necessary modifications in order to represent this phoneme in
-    // terms of the given base.
-    fn count_necessary_modifications(&self, base: &Phoneme) -> usize {
-        let feature_mods = divergences(&self.features, &base.features).count();
-
-        let parameter_mods = divergences(&self.parameters, &base.parameters).count();
-
-        feature_mods + parameter_mods
+    // terms of the given base, including possible diacritics
+    fn mismatch_with(&self, base: &Phoneme, diacritics: &DiacriticMap) -> usize {
+        self.necessary_modifications(base)
+            .iter()
+            .filter(|attr| !diacritics.has_attribute(attr))
+            .count()
     }
 
     // Gets the necessary modifications in order to represent this phoneme in
