@@ -16,6 +16,10 @@ pub struct Cli {
     /// a base character
     #[arg(long, global = true)]
     pub no_base: bool,
+
+    /// Don't normalize the input or output
+    #[arg(long, global = true)]
+    pub no_normalization: bool,
 }
 
 #[derive(Subcommand, Debug)]

@@ -20,6 +20,7 @@ mod output;
 const EXPECTED_PRIMARY_CONFIG_NAME: &str = "primary.paw";
 
 pub static mut NO_BASE: bool = false;
+pub static mut NO_NORMALIZE: bool = false;
 
 #[derive(Debug)]
 pub enum CliErrorType {
@@ -52,10 +53,11 @@ pub fn do_cli() -> ResultV<()> {
     let args = Cli::parse();
 
     unsafe {
-        // Doing this allows the many different formatting methods and stuff to
-        // know whether or not to reduce to a base without needing to pass this
-        // around and muddle everything up
+        // This lets us easily send these parameters around the program without
+        // having to jam them around the program and use things like custom
+        // display traits to take parameters
         NO_BASE = args.no_base;
+        NO_NORMALIZE = args.no_normalization;
     }
 
     match args.command {

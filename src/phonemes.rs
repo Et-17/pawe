@@ -2,8 +2,9 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 
 use itertools::Itertools;
+use unicode_normalization::UnicodeNormalization;
 
-use crate::cli::NO_BASE;
+use crate::cli::{NO_BASE, NO_NORMALIZE};
 use crate::config::{Character, CharacterDefinition, DiacriticMap, Label};
 
 pub type SelectorCode = u8;
@@ -197,6 +198,10 @@ impl Phoneme {
         for (diacritic, attribute) in new_dia_pairs {
             base.symbol.push(diacritic);
             base.phoneme.add_attribute(attribute);
+        }
+
+        if unsafe { !NO_NORMALIZE } {
+            base.symbol = base.symbol.nfc().collect();
         }
     }
 

@@ -6,7 +6,9 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use itertools::{Itertools, PeekingNext};
+use unicode_normalization::UnicodeNormalization;
 
+use crate::cli::NO_NORMALIZE;
 use crate::error_handling::{FilePosition, Result, wrap_io_error};
 use crate::phonemes::SelectorCode;
 
@@ -32,17 +34,25 @@ impl<T: BufRead> Lexer<T> {
 
         self.line_num += 1;
 
-        let mut graphemes = next_line
-            .chars()
-            .enumerate()
-            .map(MarkedChar::from_enumerated_grapheme(
-                self.line_num,
-                self.path.as_ref(),
-            ))
-            .peekable();
+        let chars = next_line.chars().enumerate();
+        if unsafe { !NO_NORMALIZE } {
+            let decomposed =
+                chars.flat_map(|(column, raw)| raw.nfd().map(move |dec| (column, dec)));
 
-        while graphemes.peek().is_some() {
-            let next_token_opt = lex_token(&mut graphemes);
+            self.add_line_to_buffer(decomposed);
+        } else {
+            self.add_line_to_buffer(chars);
+        }
+
+        return Some(Ok(()));
+    }
+
+    fn add_line_to_buffer(&mut self, line: impl Iterator<Item = (usize, char)>) {
+        let mark = MarkedChar::from_enumerated_grapheme(self.line_num, self.path.as_ref());
+        let mut marked = line.map(mark).peekable();
+
+        while marked.peek().is_some() {
+            let next_token_opt = lex_token(&mut marked);
 
             if let Some(t) = next_token_opt {
                 if t.token == RawToken::Comment {
@@ -54,8 +64,6 @@ impl<T: BufRead> Lexer<T> {
                 break;
             }
         }
-
-        return Some(Ok(()));
     }
 
     pub fn lex(input: T, path: Option<PathBuf>) -> Lexer<T> {
