@@ -112,16 +112,16 @@ impl Display for Rule {
 
 // This scans through the word trying to apply the rule, and if it applies it
 // successfully, it will continue to scan through the new word.
-pub fn do_rule<'a>(
+pub fn do_rule(
     word: &[Phoneme],
     rule: &Rule,
     character_table: &HashMap<String, Character>,
     diacritic_table: &DiacriticMap,
 ) -> Option<Vec<Phoneme>> {
-    _do_rule(&word, rule, character_table, diacritic_table, 0)
+    _do_rule(word, rule, character_table, diacritic_table, 0)
 }
 
-fn _do_rule<'a>(
+fn _do_rule(
     word: &[Phoneme],
     rule: &Rule,
     character_table: &HashMap<String, Character>,
@@ -135,13 +135,14 @@ fn _do_rule<'a>(
 
     // If we are no longer at the beginning, but the rule says to only be
     // applied at the beginning, stop
-    if let Some(env) = &rule.environment {
-        if env.match_word_start && start > 0 {
-            return None;
-        }
+    if let Some(env) = &rule.environment
+        && env.match_word_start
+        && start > 0
+    {
+        return None;
     }
 
-    match do_rule_from_pos(&word, rule, character_table, diacritic_table, start) {
+    match do_rule_from_pos(word, rule, character_table, diacritic_table, start) {
         Some(new_word) => {
             match _do_rule(&new_word, rule, character_table, diacritic_table, start + 1) {
                 Some(new_word2) => Some(new_word2),
@@ -154,7 +155,7 @@ fn _do_rule<'a>(
 
 // Tries to match the rule beginning at start. This will match word end
 // boundaries, but it will not match word start boundaries.
-fn do_rule_from_pos<'a>(
+fn do_rule_from_pos(
     word: &[Phoneme],
     rule: &Rule,
     character_table: &HashMap<String, Character>,
@@ -238,9 +239,9 @@ pub fn match_environment(word: &[Phoneme], env: &[EnvironmentAtom], start: usize
     let mut end = start;
 
     let mut word_iter = word.iter().peekable();
-    let mut env_iter = env.iter();
+    let env_iter = env.iter();
 
-    while let Some(atom) = env_iter.next() {
+    for atom in env_iter {
         end += match_environment_atom(atom, &mut word_iter, false)?;
     }
 
@@ -261,10 +262,10 @@ fn match_environment_atom<'a>(
         EnvironmentAtom::Phoneme(phoneme) => word
             .peeking_next(|w_phoneme| phoneme.matches(w_phoneme) ^ invert)
             .map(|_| 1),
-        EnvironmentAtom::Optional(atom) => match_environment_atom(&atom, word, invert).or(Some(1)),
-        EnvironmentAtom::ZeroOrMore(atom) => match_environment_atom(&atom, word, invert)
+        EnvironmentAtom::Optional(atom) => match_environment_atom(atom, word, invert).or(Some(1)),
+        EnvironmentAtom::ZeroOrMore(atom) => match_environment_atom(atom, word, invert)
             .map(|c| c + match_environment_atom(matcher, word, invert).unwrap_or(0)),
-        EnvironmentAtom::Not(atom) => match_environment_atom(&atom, word, !invert),
+        EnvironmentAtom::Not(atom) => match_environment_atom(atom, word, !invert),
     }
 }
 

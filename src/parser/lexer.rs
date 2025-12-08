@@ -44,7 +44,7 @@ impl<T: BufRead> Lexer<T> {
             self.add_line_to_buffer(chars);
         }
 
-        return Some(Ok(()));
+        Some(Ok(()))
     }
 
     fn add_line_to_buffer(&mut self, line: impl Iterator<Item = (usize, char)>) {
@@ -109,7 +109,7 @@ pub enum RawToken {
     Optional,    // ?
     ZeroOrMore,  // *
     Not,         // !
-    EOL,         // ;
+    Eol,         // ;
     Comment,     // //
 
     // Section markers
@@ -147,6 +147,7 @@ impl Debug for Token {
 
 // This is a unicode grapheme that also contains information about where in
 // the file it occurs
+#[derive(Debug)]
 struct MarkedChar {
     grapheme: char,
     pos: FilePosition,
@@ -163,6 +164,10 @@ impl MarkedChar {
             grapheme,
             pos: FilePosition::new(path, Some(line), Some(i + 1)),
         }
+    }
+
+    fn is_whitespace(&self) -> bool {
+        self.grapheme.is_whitespace()
     }
 }
 
@@ -181,7 +186,7 @@ fn read_raw_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -
 fn lex_unmarked_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> RawToken {
     let identifier = read_raw_identifier(line);
 
-    return match identifier.as_str() {
+    match identifier.as_str() {
         "languages" => RawToken::Languages,
         "parameters" => RawToken::Parameters,
         "features" => RawToken::Features,
@@ -190,25 +195,26 @@ fn lex_unmarked_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T
         "evolve" => RawToken::Evolve,
         "to" => RawToken::To,
         _ => {
-            if identifier.chars().all(char::is_numeric) {
-                if let Ok(code) = identifier.parse::<SelectorCode>() {
-                    if line.peeking_next(|c| c.grapheme == '(').is_some() {
-                        return RawToken::SelectorOpen(code);
-                    }
-
+            if identifier.chars().all(char::is_numeric)
+                && let Ok(code) = identifier.parse::<SelectorCode>()
+            {
+                if line.peeking_next(|c| c.grapheme == '(').is_some() {
+                    return RawToken::SelectorOpen(code);
+                } else {
                     return RawToken::SelectorCode(code);
                 }
             }
 
             RawToken::UnmarkedIdentifier(identifier)
         }
-    };
+    }
 }
 
 fn lex_marked_identifier<T: Iterator<Item = MarkedChar>>(
     line: &mut Peekable<T>,
     mark: bool,
 ) -> RawToken {
+    line.next(); // skip mark
     let identifier = read_raw_identifier(line);
 
     if let Some((name, variant)) = identifier.split_once('.') {
@@ -219,53 +225,58 @@ fn lex_marked_identifier<T: Iterator<Item = MarkedChar>>(
 }
 
 fn lex_token<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> Option<Token> {
-    while let Some(marked_char) = line.peek() {
-        let c = marked_char.grapheme;
-        let pos = marked_char.pos.clone();
+    line.peeking_take_while(MarkedChar::is_whitespace).count();
+    let pos = line.peek()?.pos.clone();
 
-        if c.is_whitespace() {
-            line.next();
-            continue;
-        } else if c.is_alphanumeric() {
-            return Some(mark_token(lex_unmarked_identifier(line), pos));
-        } else if c == '+' {
-            line.next();
-            return Some(mark_token(lex_marked_identifier(line, true), pos));
-        } else if c == '-' {
-            line.next();
-            return Some(mark_token(lex_marked_identifier(line, false), pos));
-        }
+    let initial = lex_character(line)?;
 
-        let to_return = match c {
-            '>' => RawToken::Output,
-            '/' => RawToken::Environment,
-            '_' => RawToken::Target,
-            '#' => RawToken::WordBoundry,
-            '?' => RawToken::Optional,
-            '*' => RawToken::ZeroOrMore,
-            '!' => RawToken::Not,
-            ';' => RawToken::EOL,
+    let potential_comment = match initial {
+        RawToken::Environment => test_comment(line),
+        others => others,
+    };
 
-            '{' => RawToken::BlockOpen,
-            '}' => RawToken::BlockClose,
-            '(' => RawToken::FilterOpen,
-            ')' => RawToken::FilterSelectorClose,
-            '[' => RawToken::PhonemeOpen,
-            ']' => RawToken::PhonemeClose,
+    Some(mark_token(potential_comment, pos))
+}
 
-            unknown => RawToken::UnknownCharacter(unknown),
-        };
+fn lex_character<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> Option<RawToken> {
+    let next = line.peek()?.grapheme;
 
-        line.next();
-
-        if to_return == RawToken::Environment {
-            if line.peek().is_some_and(|c| c.grapheme == '/') {
-                line.next();
-                return Some(mark_token(RawToken::Comment, pos));
-            }
-        }
-        return Some(mark_token(to_return, pos));
+    if next == '+' {
+        return Some(lex_marked_identifier(line, true));
+    } else if next == '-' {
+        return Some(lex_marked_identifier(line, false));
+    } else if next.is_alphanumeric() {
+        return Some(lex_unmarked_identifier(line));
     }
 
-    return None;
+    let to_return = Some(match next {
+        '>' => RawToken::Output,
+        '/' => RawToken::Environment,
+        '_' => RawToken::Target,
+        '#' => RawToken::WordBoundry,
+        '?' => RawToken::Optional,
+        '*' => RawToken::ZeroOrMore,
+        '!' => RawToken::Not,
+        ';' => RawToken::Eol,
+
+        '{' => RawToken::BlockOpen,
+        '}' => RawToken::BlockClose,
+        '(' => RawToken::FilterOpen,
+        ')' => RawToken::FilterSelectorClose,
+        '[' => RawToken::PhonemeOpen,
+        ']' => RawToken::PhonemeClose,
+
+        unknown => RawToken::UnknownCharacter(unknown),
+    });
+
+    line.next();
+    to_return
+}
+
+fn test_comment<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> RawToken {
+    if line.peek().is_some_and(|c| c.grapheme == '/') {
+        RawToken::Comment
+    } else {
+        RawToken::Environment
+    }
 }

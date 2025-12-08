@@ -131,7 +131,7 @@ fn parse_parameters(
     while let Some(token) = file.next() {
         if token.token == RawToken::BlockClose {
             break;
-        } else if token.token == RawToken::EOL {
+        } else if token.token == RawToken::Eol {
             continue;
         }
 
@@ -174,7 +174,7 @@ fn parse_characters(
     while let Some(token) = def_block.next() {
         if token.token == RawToken::BlockClose {
             break;
-        } else if token.token == RawToken::EOL {
+        } else if token.token == RawToken::Eol {
             continue;
         }
 
@@ -234,7 +234,7 @@ fn parse_diacritics(
     confirm_token_type(file, RawToken::BlockOpen, ExpectedBlock, pos)?;
     let mut def_block = file.take_while(end_block);
     while let Some(token) = def_block.next() {
-        if token.token == RawToken::EOL {
+        if token.token == RawToken::Eol {
             continue;
         }
 
@@ -304,8 +304,8 @@ fn parse_evolve(
     let mut rules = Vec::new();
     confirm_token_type(file, RawToken::BlockOpen, ExpectedBlock, pos)?;
     let mut block_iter = file.take_while(end_block).peekable();
-    while let Some(_) = block_iter.peek() {
-        let mut line_iter = (&mut block_iter).take_while(|t| t.token != RawToken::EOL);
+    while block_iter.peek().is_some() {
+        let mut line_iter = (&mut block_iter).take_while(|t| t.token != RawToken::Eol);
 
         match parse_evolution_rule(&mut line_iter, config, pos) {
             Ok(rule) => rules.push(rule),
@@ -596,7 +596,7 @@ fn parse_identifier_block(file: &mut impl Iterator<Item = Token>) -> ResultV<Vec
     // If it was some other unknown token, then throw an error.
     let mut empty_line = true;
     for token in file.take_while(end_block) {
-        if token.token == RawToken::EOL {
+        if token.token == RawToken::Eol {
             empty_line = true;
         } else if !empty_line {
             errors.push(ExpectedEOL.at(token.pos));
@@ -765,7 +765,7 @@ fn confirm_token_type(
 // Goes until it consumes an EOL, and then marks every found token an error.
 fn end_line(file: &mut impl Iterator<Item = Token>) -> ResultV<()> {
     let errors: Vec<_> = file
-        .take_while(|token| token.token != RawToken::EOL)
+        .take_while(|token| token.token != RawToken::Eol)
         .map(|token| ExpectedEOL.at(token.pos))
         .collect();
 

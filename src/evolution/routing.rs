@@ -72,7 +72,7 @@ fn search(start: &Label, end: &Label, evolutions: &Evolutions) -> Result<Route> 
         }
 
         if let Some(descendants) = evolutions.get(next_lang) {
-            frontier.extend(descendants.iter().map(|(desc, _)| desc));
+            frontier.extend(descendants.keys());
         }
     }
 

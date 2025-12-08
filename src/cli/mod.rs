@@ -101,7 +101,7 @@ fn verify_config_existence(path: PathBuf) -> Result<PathBuf> {
 fn fill_in_param<T: Default + Clone>(param: &Option<T>, fill_in: &Option<T>) -> T {
     param
         .as_ref()
-        .or_else(|| fill_in.as_ref())
+        .or(fill_in.as_ref())
         .cloned()
         .unwrap_or_default()
 }
@@ -145,7 +145,7 @@ fn do_evolution_step(
     let rules = config.evolutions.get(start).unwrap().get(end).unwrap();
 
     for rule in rules {
-        if let Some(new_word) = do_rule(&word, &rule, &config.characters, &config.diacritics) {
+        if let Some(new_word) = do_rule(&word, rule, &config.characters, &config.diacritics) {
             word = new_word;
             output::display_application(&word, true, rule, args);
         } else {
@@ -177,7 +177,7 @@ fn tree(args: TreeArgs, config_args: ConfigArgs) -> ResultV<()> {
 
 fn no_display_evolution_step(word: Vec<Phoneme>, rules: &[Rule], config: &Config) -> Vec<Phoneme> {
     rules.iter().fold(word, |w, rule| {
-        do_rule(&w, &rule, &config.characters, &config.diacritics).unwrap_or(w)
+        do_rule(&w, rule, &config.characters, &config.diacritics).unwrap_or(w)
     })
 }
 
@@ -219,13 +219,13 @@ fn gen_tree(
 }
 
 fn gen_tree_child(
-    word: &Vec<Phoneme>,
+    word: &[Phoneme],
     depth: u32,
     args: &TreeArgs,
     config: &Config,
 ) -> impl FnMut((&Label, &Vec<Rule>)) -> TreeNode {
     move |(child, child_rules)| {
-        let new_word = no_display_evolution_step(word.clone(), child_rules, config);
+        let new_word = no_display_evolution_step(word.to_owned(), child_rules, config);
         gen_tree(new_word, child.clone(), depth + 1, args, config)
     }
 }

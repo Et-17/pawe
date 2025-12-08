@@ -94,9 +94,7 @@ impl Display for Error {
 // that returns a vector of errors, especially in parsing
 impl From<Error> for Vec<Error> {
     fn from(value: Error) -> Self {
-        let mut errors = Vec::with_capacity(1);
-        errors.push(value);
-        return errors;
+        vec![value]
     }
 }
 
@@ -133,7 +131,7 @@ pub fn wrap_io_error(
     pos: Option<&FilePosition>,
 ) -> impl Fn(std::io::Error) -> Error {
     move |error: std::io::Error| Error {
-        pos: pos.map(Clone::clone),
+        pos: pos.cloned(),
         module: module.to_string(),
         error: Box::new(IOError(error)),
     }

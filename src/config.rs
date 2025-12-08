@@ -25,7 +25,7 @@ impl Label {
 impl Clone for Label {
     fn clone(&self) -> Self {
         Label {
-            code: self.code.clone(),
+            code: self.code,
             label: Rc::clone(&self.label),
         }
     }
@@ -94,7 +94,7 @@ impl From<Vec<String>> for LabelEncoding {
 
         encoding.extend(value);
 
-        return encoding;
+        encoding
     }
 }
 
@@ -130,7 +130,7 @@ impl ParameterEncoding {
     // Returns Ok() with the new parameter label if the add was successful,
     // but returns Err() if the parameter already existed
     pub fn add(&mut self, name: String, variants: Vec<String>) -> Result<(), ()> {
-        if self.p_table.get(&name).is_some() {
+        if self.p_table.contains_key(&name) {
             return Err(());
         }
 
@@ -199,9 +199,9 @@ impl Display for CharacterDefinition {
 
 pub type Character = Rc<CharacterDefinition>;
 
-impl Into<Phoneme> for Character {
-    fn into(self) -> Phoneme {
-        std::iter::once(crate::phonemes::Attribute::Character(self)).collect()
+impl From<Character> for Phoneme {
+    fn from(val: Character) -> Self {
+        std::iter::once(crate::phonemes::Attribute::Character(val)).collect()
     }
 }
 
@@ -245,7 +245,7 @@ impl DiacriticMap {
     // Returns Ok(()) if the add was successful, but Err(()) if the diacritic
     // already existed or the attribute is not a valid type
     pub fn add(&mut self, diacritic: char, attribute: Attribute) -> Result<(), ()> {
-        if self.decoding_map.get(&diacritic).is_some() {
+        if self.decoding_map.contains_key(&diacritic) {
             return Err(());
         }
 
@@ -279,12 +279,11 @@ impl DiacriticMap {
             .collect_vec();
 
         p_dias.sort_unstable_by_key(|p_dia| p_dia.0.1);
-        let dia_pairs = p_dias
+
+        p_dias
             .into_iter()
             .map(|((dia, _), attr)| (dia, attr))
-            .collect();
-
-        dia_pairs
+            .collect()
     }
 }
 

@@ -23,7 +23,7 @@ impl Attribute {
     // just return it as is, but if it's a selection, then it will attempt to
     // get the target from the selection table. If the selection is invalid, it
     // will just not bind
-    fn bind<'a>(self, selection_table: &HashMap<SelectorCode, &'a Phoneme>) -> Self {
+    fn bind(self, selection_table: &HashMap<SelectorCode, &Phoneme>) -> Self {
         if let Self::Selection(code) = self {
             selection_table
                 .get(&code)
@@ -66,7 +66,7 @@ impl Phoneme {
         }
     }
 
-    pub fn add_character(&mut self, character: Character) -> () {
+    pub fn add_character(&mut self, character: Character) {
         if self.base.is_none() {
             self.set_base(&character);
         }
@@ -75,13 +75,13 @@ impl Phoneme {
 
     // Adds all the attributes from the given phoneme to this phoneme, so that
     // you can write defined characters in phoneme blocks to modify them
-    pub fn add_phoneme(&mut self, phoneme: Phoneme) -> () {
+    pub fn add_phoneme(&mut self, phoneme: Phoneme) {
         self.features.extend(phoneme.features);
         self.parameters.extend(phoneme.parameters);
     }
 
     // This function will discard selector references and negative parameters
-    pub fn add_attribute(&mut self, attribute: Attribute) -> () {
+    pub fn add_attribute(&mut self, attribute: Attribute) {
         match attribute {
             Attribute::Feature(mark, feat) => {
                 self.features.insert(feat, mark);
@@ -127,12 +127,12 @@ impl Phoneme {
         }
 
         for (param, self_value) in self.parameters.iter() {
-            if !no_base && let Some(ref base) = self.base {
-                if let Some(base_value) = base.phoneme.parameters.get(&param) {
-                    if *self_value == *base_value {
-                        continue;
-                    }
-                }
+            if !no_base
+                && let Some(ref base) = self.base
+                && let Some(base_value) = base.phoneme.parameters.get(param)
+                && *self_value == *base_value
+            {
+                continue;
             }
 
             attrs.push(Attribute::Parameter(
@@ -143,15 +143,15 @@ impl Phoneme {
         }
 
         for (feat, self_value) in self.features.iter() {
-            if !no_base && let Some(ref base) = self.base {
-                if let Some(base_value) = base.phoneme.features.get(&feat) {
-                    if *self_value == *base_value {
-                        continue;
-                    }
-                }
+            if !no_base
+                && let Some(ref base) = self.base
+                && let Some(base_value) = base.phoneme.features.get(feat)
+                && *self_value == *base_value
+            {
+                continue;
             }
 
-            attrs.push(Attribute::Feature(self_value.clone(), feat.clone()));
+            attrs.push(Attribute::Feature(*self_value, feat.clone()));
         }
 
         attrs
@@ -170,7 +170,7 @@ impl Phoneme {
         }
 
         if let Some(new_base) = self.best_base(characters, diacritics) {
-            self.set_base(&new_base);
+            self.set_base(new_base);
             let mods = self.necessary_modifications(&new_base.phoneme);
             self.integrate_modifications(mods, diacritics);
         }
@@ -226,7 +226,7 @@ impl Phoneme {
     // terms of the given base.
     fn necessary_modifications(&self, base: &Phoneme) -> Vec<Attribute> {
         let feature_mods = divergences(&self.features, &base.features)
-            .map(|(feat, mark)| Attribute::Feature(mark.clone(), feat.clone()));
+            .map(|(feat, mark)| Attribute::Feature(*mark, feat.clone()));
 
         let parameter_mods = divergences(&self.parameters, &base.parameters)
             .map(|(param, variant)| Attribute::Parameter(true, param.clone(), variant.clone()));
@@ -250,13 +250,13 @@ impl FromIterator<Attribute> for Phoneme {
 impl Display for Phoneme {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let attrs = self.attr_display();
-        if attrs.len() == 0 {
+        if attrs.is_empty() {
             return write!(f, "EMPTY=PHONEME");
         }
-        if attrs.len() == 1 {
-            if let Attribute::Display(character) = &attrs[0] {
-                return write!(f, "{}", character);
-            }
+        if attrs.len() == 1
+            && let Attribute::Display(character) = &attrs[0]
+        {
+            return write!(f, "{}", character);
         }
 
         write!(f, "[{}]", attrs.iter().join(" "))
@@ -273,7 +273,7 @@ impl UnboundPhoneme {
     // because Phoneme's constructor just ignores selector Attributes, and the
     // Attribute's bind function just doesn't bind if the selection is invalid.
     // Note that this creates a new Phoneme by cloning all the Attributes.
-    pub fn bind<'a>(&self, selection_table: &HashMap<SelectorCode, &'a Phoneme>) -> Phoneme {
+    pub fn bind(&self, selection_table: &HashMap<SelectorCode, &Phoneme>) -> Phoneme {
         self.attributes
             .iter()
             .cloned()
@@ -329,7 +329,7 @@ impl Filter {
     }
 
     // This function will discard selector refernces and characters
-    pub fn add_attribute(&mut self, attribute: Attribute) -> () {
+    pub fn add_attribute(&mut self, attribute: Attribute) {
         match attribute {
             Attribute::Feature(mark, feat) => {
                 self.features.insert(feat, mark);
@@ -372,7 +372,7 @@ impl FromIterator<Attribute> for Filter {
             filter.add_attribute(attribute);
         }
 
-        return filter;
+        filter
     }
 }
 
