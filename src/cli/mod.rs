@@ -108,8 +108,8 @@ fn fill_in_param<T: Default + Clone>(param: &Option<T>, fill_in: &Option<T>) -> 
 
 fn evolve(args: EvolveArgs, config_args: ConfigArgs) -> ResultV<()> {
     let config_path = find_config_file(config_args)?;
-    let mut config = parse_config_file(config_path)?;
-    let mut word = parse_word(&args.word, &mut config)?;
+    let config = parse_config_file(config_path)?;
+    let mut word = parse_word(&args.word, &config)?;
 
     let start_name = fill_in_param(&args.start, &config.first_language);
     let end_name = fill_in_param(&args.end, &config.last_language);
@@ -160,8 +160,8 @@ fn do_evolution_step(
 
 fn tree(args: TreeArgs, config_args: ConfigArgs) -> ResultV<()> {
     let config_path = find_config_file(config_args)?;
-    let mut config = parse_config_file(config_path)?;
-    let word = parse_word(&args.word, &mut config)?;
+    let config = parse_config_file(config_path)?;
+    let word = parse_word(&args.word, &config)?;
 
     let start_name = fill_in_param(&args.start, &config.first_language);
     let Some(start) = config.languages.encode(&start_name) else {

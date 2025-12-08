@@ -23,14 +23,14 @@ pub fn parse_config_file(path: std::path::PathBuf) -> ResultV<Config> {
         .process_results(|mut tokens| parse_config(&mut tokens))?
 }
 
-pub fn parse_word(word: &str, config: &mut Config) -> ResultV<Vec<Phoneme>> {
+pub fn parse_word(word: &str, config: &Config) -> ResultV<Vec<Phoneme>> {
     Lexer::lex(std::io::Cursor::new(word), None)
         .process_results(|mut tokens| parse_unwrapped_word(&mut tokens, config))?
 }
 
 fn parse_unwrapped_word(
     word: &mut impl Iterator<Item = Token>,
-    config: &mut Config,
+    config: &Config,
 ) -> ResultV<Vec<Phoneme>> {
     let mut errors = Vec::new();
 
@@ -342,7 +342,7 @@ fn parse_evolve(
 
 fn read_language(
     file: &mut impl Iterator<Item = Token>,
-    config: &mut Config,
+    config: &Config,
     pos: &FilePosition,
 ) -> Result<Label> {
     let Some(language_token) = file.next() else {
@@ -361,7 +361,7 @@ fn read_language(
 
 fn parse_evolution_rule(
     file: &mut impl Iterator<Item = Token>,
-    config: &mut Config,
+    config: &Config,
     pos: &FilePosition,
 ) -> ResultV<Rule> {
     let mut errors = Vec::new();
@@ -439,7 +439,7 @@ fn parse_evolution_rule(
 // restrict it.
 fn parse_evolution_environment(
     file: &mut impl Iterator<Item = Token>,
-    config: &mut Config,
+    config: &Config,
     pos: &FilePosition,
 ) -> ResultV<Environment> {
     let mut errors = Vec::new();
@@ -611,7 +611,7 @@ fn parse_identifier_block(file: &mut impl Iterator<Item = Token>) -> ResultV<Vec
     check_errors(identifiers, errors)
 }
 
-fn parse_phoneme(file: &mut impl Iterator<Item = Token>, config: &mut Config) -> ResultV<Phoneme> {
+fn parse_phoneme(file: &mut impl Iterator<Item = Token>, config: &Config) -> ResultV<Phoneme> {
     let attributes = parse_attribute_list(file, config, true)?;
 
     Ok(Phoneme::from_iter(attributes))
@@ -619,7 +619,7 @@ fn parse_phoneme(file: &mut impl Iterator<Item = Token>, config: &mut Config) ->
 
 fn parse_selector(
     file: &mut impl Iterator<Item = Token>,
-    config: &mut Config,
+    config: &Config,
     code: SelectorCode,
 ) -> ResultV<Selector> {
     Ok(Selector {
@@ -628,7 +628,7 @@ fn parse_selector(
     })
 }
 
-fn parse_filter(file: &mut impl Iterator<Item = Token>, config: &mut Config) -> ResultV<Filter> {
+fn parse_filter(file: &mut impl Iterator<Item = Token>, config: &Config) -> ResultV<Filter> {
     let attributes = parse_attribute_list(file, config, false)?;
 
     Ok(Filter::from_iter(attributes))
@@ -638,7 +638,7 @@ fn parse_filter(file: &mut impl Iterator<Item = Token>, config: &mut Config) -> 
 // attributes that other functions can process
 fn parse_attribute_list(
     file: &mut impl Iterator<Item = Token>,
-    config: &mut Config,
+    config: &Config,
     is_phoneme: bool,
 ) -> ResultV<Vec<Attribute>> {
     let close_token = match is_phoneme {
@@ -654,7 +654,7 @@ fn parse_attribute_list(
     check_errors(attributes, errors.into_iter().flatten().collect_vec())
 }
 
-fn parse_attribute(config: &mut Config, token: Token, allow_neg_param: bool) -> ResultV<Attribute> {
+fn parse_attribute(config: &Config, token: Token, allow_neg_param: bool) -> ResultV<Attribute> {
     let res = match token.token {
         RawToken::MarkedFeature(mark, feat) => parse_feature(config, mark, feat, &token.pos)?,
         RawToken::MarkedParameter(mark, param, variant) => {
@@ -670,7 +670,7 @@ fn parse_attribute(config: &mut Config, token: Token, allow_neg_param: bool) -> 
 }
 
 fn parse_feature(
-    config: &mut Config,
+    config: &Config,
     mark: bool,
     feature: String,
     pos: &FilePosition,
@@ -682,7 +682,7 @@ fn parse_feature(
 }
 
 fn parse_parameter(
-    config: &mut Config,
+    config: &Config,
     mark: bool,
     parameter: String,
     variant: String,
@@ -701,7 +701,7 @@ fn parse_parameter(
 }
 
 fn parse_character<T: FromIterator<Attribute>>(
-    config: &mut Config,
+    config: &Config,
     identifier: String,
     pos: &FilePosition,
 ) -> ResultV<T> {
@@ -730,7 +730,7 @@ fn parse_character<T: FromIterator<Attribute>>(
 }
 
 fn parse_base_character(
-    config: &mut Config,
+    config: &Config,
     character: String,
     pos: &FilePosition,
 ) -> Result<Attribute> {

@@ -148,11 +148,7 @@ impl ParameterEncoding {
     // Returns Some(parameter, Some(variant)). If the parameter could not be
     // found, this will return None. If the variant could not be found, this
     // will return Some(parameter, None).
-    pub fn encode(
-        &mut self,
-        parameter: &String,
-        variant: &String,
-    ) -> Option<(Label, Option<Label>)> {
+    pub fn encode(&self, parameter: &String, variant: &String) -> Option<(Label, Option<Label>)> {
         let p_label = self.p_table.get(parameter)?.clone();
 
         let v_label_opt = self
