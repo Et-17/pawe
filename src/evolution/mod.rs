@@ -264,7 +264,8 @@ fn match_environment_atom<'a>(
             .map(|_| 1),
         EnvironmentAtom::Optional(atom) => match_environment_atom(atom, word, invert).or(Some(1)),
         EnvironmentAtom::ZeroOrMore(atom) => match_environment_atom(atom, word, invert)
-            .map(|c| c + match_environment_atom(matcher, word, invert).unwrap_or(0)),
+            .map(|c| c + match_environment_atom(matcher, word, invert).unwrap_or(0))
+            .or(Some(0)),
         EnvironmentAtom::Not(atom) => match_environment_atom(atom, word, !invert),
     }
 }
