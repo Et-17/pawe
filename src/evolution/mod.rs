@@ -58,27 +58,27 @@ impl Display for EnvironmentAtom {
 
 #[derive(Debug)]
 pub struct Environment {
-    pub match_word_start: bool,
-    pub match_word_end: bool,
-    pub pre_environment: Vec<EnvironmentAtom>,
-    pub post_environment: Vec<EnvironmentAtom>,
+    pub match_start: bool,
+    pub match_end: bool,
+    pub pre: Vec<EnvironmentAtom>,
+    pub post: Vec<EnvironmentAtom>,
 }
 
 impl Display for Environment {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.match_word_start {
+        if self.match_start {
             write!(f, "# ")?;
         }
 
-        for atom in &self.pre_environment {
+        for atom in &self.pre {
             write!(f, "{atom} ")?;
         }
         write!(f, "_")?;
-        for atom in &self.post_environment {
+        for atom in &self.post {
             write!(f, " {atom}")?;
         }
 
-        if self.match_word_end {
+        if self.match_end {
             write!(f, " #")?;
         }
         Ok(())
@@ -136,7 +136,7 @@ fn do_rule_i(
     // If we are no longer at the beginning, but the rule says to only be
     // applied at the beginning, stop
     if let Some(env) = &rule.environment
-        && env.match_word_start
+        && env.match_start
         && start > 0
     {
         return None;
@@ -165,7 +165,7 @@ fn do_rule_from_pos(
     // Preënvironment
     let mut end_pre_environment = start;
     if let Some(env) = &rule.environment {
-        end_pre_environment = match_environment(&word[start..], &env.pre_environment, start)?;
+        end_pre_environment = match_environment(&word[start..], &env.pre, start)?;
     }
 
     // Input
@@ -177,10 +177,9 @@ fn do_rule_from_pos(
 
     //Postenvironment
     if let Some(env) = &rule.environment {
-        let end_post_environment =
-            match_environment(&word[end_input..], &env.post_environment, end_input)?;
+        let end_post_environment = match_environment(&word[end_input..], &env.post, end_input)?;
 
-        if env.match_word_end && end_post_environment != word.len() {
+        if env.match_end && end_post_environment != word.len() {
             return None;
         }
     }
@@ -235,11 +234,15 @@ fn bind_output(
 // position, we expect word to already be subsliced.
 // Returns the index of the phoneme after the matched environment, ie the last
 // index of the environment + 1.
-pub fn match_environment(word: &[Phoneme], env: &[EnvironmentAtom], start: usize) -> Option<usize> {
+pub fn match_environment(
+    word: &[Phoneme],
+    environment: &[EnvironmentAtom],
+    start: usize,
+) -> Option<usize> {
     let mut end = start;
 
     let mut word_iter = word.iter().peekable();
-    let env_iter = env.iter();
+    let env_iter = environment.iter();
 
     for atom in env_iter {
         end += match_environment_atom(atom, &mut word_iter, false)?;

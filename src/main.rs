@@ -1,6 +1,5 @@
 #![warn(clippy::pedantic)]
-#![allow(clippy::struct_field_names)]
-#![allow(clippy::similar_names)]
+#![allow(clippy::enum_glob_use)]
 
 use std::process::ExitCode;
 

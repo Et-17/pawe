@@ -47,7 +47,6 @@ impl std::fmt::Display for CliErrorType {
     }
 }
 
-#[allow(clippy::enum_glob_use)]
 use CliErrorType::*;
 
 pub fn do_cli() -> ResultV<()> {

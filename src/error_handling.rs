@@ -57,7 +57,7 @@ pub trait ErrorType: Display + Debug {
         Error {
             pos: Some(pos),
             module: self.module(),
-            error: Box::new(self),
+            internal: Box::new(self),
         }
     }
 
@@ -68,16 +68,16 @@ pub trait ErrorType: Display + Debug {
         Error {
             pos: None,
             module: self.module(),
-            error: Box::new(self),
+            internal: Box::new(self),
         }
     }
 }
 
 #[derive(Debug)]
 pub struct Error {
-    pub pos: Option<FilePosition>,
-    pub module: String,
-    pub error: Box<dyn ErrorType>,
+    pos: Option<FilePosition>,
+    module: String,
+    internal: Box<dyn ErrorType>,
 }
 
 impl Display for Error {
@@ -86,7 +86,7 @@ impl Display for Error {
         if let Some(ref pos) = self.pos {
             write!(f, " {pos}")?;
         }
-        write!(f, ": {}", self.error)
+        write!(f, ": {}", self.internal)
     }
 }
 
@@ -133,7 +133,7 @@ pub fn wrap_io_error(
     move |error: std::io::Error| Error {
         pos: pos.cloned(),
         module: module.to_string(),
-        error: Box::new(IOError(error)),
+        internal: Box::new(IOError(error)),
     }
 }
 

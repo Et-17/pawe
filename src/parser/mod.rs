@@ -10,7 +10,6 @@ use crate::error_handling::{
 use crate::evolution::{Environment, EnvironmentAtom, InputAtom, Rule};
 use crate::phonemes::{Attribute, Filter, Phoneme, Selector, SelectorCode, UnboundPhoneme};
 
-#[allow(clippy::enum_glob_use)]
 use errors::ParseErrorType::*;
 use lexer::{Lexer, RawToken, Token};
 
@@ -436,149 +435,114 @@ fn parse_evolution_rule(
     )
 }
 
-// This function will consume all of file. Only use on a take_while that will
-// restrict it.
 fn parse_evolution_environment(
     file: &mut impl Iterator<Item = Token>,
     config: &Config,
     pos: &FilePosition,
 ) -> ResultV<Environment> {
+    let mut tokens: Vec<Token> = file.take_while(|tok| tok.token != RawToken::Eol).collect();
+    let last_pos = tokens.last().map_or(pos, |tok| &tok.pos).clone();
+
+    let match_start = tokens
+        .first()
+        .is_some_and(|tok| tok.token == RawToken::WordBoundry);
+    if match_start {
+        tokens.remove(0);
+    }
+
+    let match_end = tokens
+        .last()
+        .is_some_and(|tok| tok.token == RawToken::WordBoundry);
+    if match_end {
+        tokens.pop();
+    }
+
+    let mut splitting_iter = tokens.into_iter().peekable();
+    let raw_pre: Vec<_> = splitting_iter
+        .peeking_take_while(|tok| tok.token != RawToken::Target)
+        .collect();
+    let target_exists = splitting_iter
+        .next()
+        .is_some_and(|tok| tok.token == RawToken::Target);
+    let raw_post: Vec<_> = splitting_iter.collect();
+    if !target_exists {
+        return Err(MissingTarget.at(last_pos).into());
+    }
+
     let mut errors = Vec::new();
-    let mut last_pos = pos.clone();
 
-    let mut pre_environment = Vec::new();
-    let mut first = true;
-    let mut match_word_start = false;
-    loop {
-        // This loop will break if it sees a target token. If it reaches the end
-        // of the input before finding a target token, we know that there isn't
-        // one in the environment
-        let Some(token) = file.next() else {
-            errors.push(MissingTarget.at(last_pos.clone()));
-            return Err(errors);
-        };
-        last_pos = token.pos;
-
-        match token.token {
-            RawToken::PhonemeOpen => match parse_phoneme(file, config) {
-                Ok(phoneme) => pre_environment.push(EnvironmentAtom::Phoneme(phoneme)),
-                Err(mut errs) => errors.append(&mut errs),
-            },
-            RawToken::FilterOpen => match parse_filter(file, config) {
-                Ok(filter) => pre_environment.push(EnvironmentAtom::Filter(filter)),
-                Err(mut errs) => errors.append(&mut errs),
-            },
-            RawToken::UnmarkedIdentifier(ident) => {
-                match parse_character(config, &ident, &last_pos) {
-                    Ok(phoneme) => pre_environment.push(EnvironmentAtom::Phoneme(phoneme)),
-                    Err(mut errs) => errors.append(&mut errs),
-                }
-            }
-            RawToken::Optional => {
-                if pre_environment.is_empty() {
-                    errors.push(MisplacedOptional.at(last_pos.clone()));
-                } else {
-                    let new_atom =
-                        EnvironmentAtom::Optional(Box::new(pre_environment.pop().unwrap()));
-                    pre_environment.push(new_atom);
-                }
-            }
-            RawToken::ZeroOrMore => {
-                if pre_environment.is_empty() {
-                    errors.push(MisplacedZeroOrMore.at(last_pos.clone()));
-                } else {
-                    let new_atom =
-                        EnvironmentAtom::ZeroOrMore(Box::new(pre_environment.pop().unwrap()));
-                    pre_environment.push(new_atom);
-                }
-            }
-            RawToken::Not => {
-                if pre_environment.is_empty() {
-                    errors.push(MisplacedNot.at(last_pos.clone()));
-                } else {
-                    let new_atom = EnvironmentAtom::Not(Box::new(pre_environment.pop().unwrap()));
-                    pre_environment.push(new_atom);
-                }
-            }
-            RawToken::WordBoundry => {
-                if first {
-                    match_word_start = true;
-                } else {
-                    errors.push(MisplacedWordBoundary.at(last_pos.clone()));
-                }
-            }
-            RawToken::Target => break,
-            unexpected => errors.push(UnexpectedToken(unexpected).at(last_pos.clone())),
-        }
-
-        first = false;
-    }
-
-    let mut post_environment = Vec::new();
-    let mut match_word_end_pos: Option<FilePosition> = None;
-    while let Some(token) = file.next() {
-        // Check if this is extra environment after matching word end
-        if let Some(ref token_pos) = match_word_end_pos {
-            errors.push(MisplacedWordBoundary.at(token_pos.clone()));
-            continue;
-        }
-
-        match token.token {
-            RawToken::PhonemeOpen => match parse_phoneme(file, config) {
-                Ok(phoneme) => post_environment.push(EnvironmentAtom::Phoneme(phoneme)),
-                Err(mut errs) => errors.append(&mut errs),
-            },
-            RawToken::FilterOpen => match parse_filter(file, config) {
-                Ok(filter) => post_environment.push(EnvironmentAtom::Filter(filter)),
-                Err(mut errs) => errors.append(&mut errs),
-            },
-            RawToken::UnmarkedIdentifier(ident) => {
-                match parse_character(config, &ident, &token.pos) {
-                    Ok(phoneme) => post_environment.push(EnvironmentAtom::Phoneme(phoneme)),
-                    Err(mut errs) => errors.append(&mut errs),
-                }
-            }
-            RawToken::Optional => {
-                if post_environment.is_empty() {
-                    errors.push(MisplacedOptional.at(token.pos));
-                } else {
-                    let new_atom =
-                        EnvironmentAtom::Optional(Box::new(post_environment.pop().unwrap()));
-                    post_environment.push(new_atom);
-                }
-            }
-            RawToken::ZeroOrMore => {
-                if post_environment.is_empty() {
-                    errors.push(MisplacedZeroOrMore.at(token.pos));
-                } else {
-                    let new_atom =
-                        EnvironmentAtom::ZeroOrMore(Box::new(post_environment.pop().unwrap()));
-                    post_environment.push(new_atom);
-                }
-            }
-            RawToken::Not => {
-                if post_environment.is_empty() {
-                    errors.push(MisplacedNot.at(token.pos));
-                } else {
-                    let new_atom =
-                        EnvironmentAtom::ZeroOrMore(Box::new(post_environment.pop().unwrap()));
-                    post_environment.push(new_atom);
-                }
-            }
-            RawToken::WordBoundry => match_word_end_pos = Some(token.pos),
-            RawToken::Target => errors.push(MultipleTargets.at(token.pos)),
-            unexpected => errors.push(UnexpectedToken(unexpected).at(token.pos)),
-        }
-    }
+    let pre = parse_single_environment(raw_pre, config, &mut errors);
+    let post = parse_single_environment(raw_post, config, &mut errors);
 
     let environment = Environment {
-        match_word_start,
-        match_word_end: match_word_end_pos.is_some(),
-        pre_environment,
-        post_environment,
+        match_start,
+        match_end,
+        pre,
+        post,
     };
 
     check_errors(environment, errors)
+}
+
+// Bit of an odd approach, instead of directly returning a Result, this will put
+// all of its generated errors into the vector passed in `errors`, and then
+// return whatever atoms it could scrounge together successfully
+fn parse_single_environment(
+    tokens: Vec<Token>,
+    config: &Config,
+    errors: &mut Vec<Error>,
+) -> Vec<EnvironmentAtom> {
+    let mut atoms = Vec::new();
+    let mut iter = tokens.into_iter();
+
+    while let Some(next) = parse_environment_atom(&mut iter, &mut atoms, config) {
+        match next {
+            Ok(atom) => atoms.push(atom),
+            Err(mut errs) => errors.append(&mut errs),
+        }
+    }
+
+    atoms
+}
+
+fn parse_environment_atom(
+    tokens: &mut impl Iterator<Item = Token>,
+    previous: &mut Vec<EnvironmentAtom>,
+    config: &Config,
+) -> Option<ResultV<EnvironmentAtom>> {
+    use EnvironmentAtom::*;
+
+    let token = tokens.next()?;
+
+    Some(match token.token {
+        RawToken::PhonemeOpen => parse_phoneme(tokens, config).map(Phoneme),
+        RawToken::FilterOpen => parse_filter(tokens, config).map(Filter),
+        RawToken::UnmarkedIdentifier(ident) => {
+            parse_character(config, &ident, &token.pos).map(Phoneme)
+        }
+        RawToken::Optional => bundle_special_atom(previous, Optional, MisplacedOptional, token.pos),
+        RawToken::ZeroOrMore => {
+            bundle_special_atom(previous, ZeroOrMore, MisplacedZeroOrMore, token.pos)
+        }
+        RawToken::Not => bundle_special_atom(previous, Not, MisplacedNot, token.pos),
+
+        RawToken::WordBoundry => Err(MisplacedWordBoundary.at(token.pos).into()),
+        RawToken::Target => Err(MultipleTargets.at(token.pos).into()),
+        unexpected => Err(UnexpectedToken(unexpected).at(token.pos).into()),
+    })
+}
+
+fn bundle_special_atom<E: From<Error>>(
+    previous: &mut Vec<EnvironmentAtom>,
+    bundler: impl Fn(Box<EnvironmentAtom>) -> EnvironmentAtom,
+    error: impl ErrorType + 'static,
+    pos: FilePosition,
+) -> std::result::Result<EnvironmentAtom, E> {
+    let Some(argument) = previous.pop() else {
+        return Err(error.at(pos).into());
+    };
+
+    Ok(bundler(argument.into()))
 }
 
 // Several syntax elements are composed of a block of lines containing a single
