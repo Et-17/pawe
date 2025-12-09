@@ -1,3 +1,7 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::struct_field_names)]
+#![allow(clippy::similar_names)]
+
 use std::process::ExitCode;
 
 mod cli;
@@ -10,7 +14,7 @@ mod phonemes;
 fn main() -> ExitCode {
     if let Err(errs) = cli::do_cli() {
         for err in errs {
-            println!("{}", err);
+            println!("{err}");
         }
         ExitCode::FAILURE
     } else {

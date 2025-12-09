@@ -200,9 +200,8 @@ fn lex_unmarked_identifier<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T
             {
                 if line.peeking_next(|c| c.grapheme == '(').is_some() {
                     return RawToken::SelectorOpen(code);
-                } else {
-                    return RawToken::SelectorCode(code);
                 }
+                return RawToken::SelectorCode(code);
             }
 
             RawToken::UnmarkedIdentifier(identifier)

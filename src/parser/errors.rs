@@ -55,16 +55,14 @@ impl Display for ParseErrorType {
             Self::ExpectedTo => write!(f, "Expected `to`"),
             Self::MissingTarget => write!(f, "There is no target in the environment"),
 
-            Self::UndefinedFeature(feat) => write!(f, "Could not find feature `{}`", feat),
-            Self::UndefinedParameter(param) => write!(f, "Could not find parameter `{}`", param),
-            Self::UndefinedParameterVariant(param, var) => write!(
-                f,
-                "Could not find variant `{}` in parameter `{}`",
-                var, param
-            ),
-            Self::UndefinedCharacter(c) => write!(f, "Could not find character `{}`", c),
-            Self::UndefinedLanguage(lang) => write!(f, "Could not find language `{}`", lang),
-            Self::UndefinedDiacritic(dia) => write!(f, "Could not find diacritic `◌{}`", dia),
+            Self::UndefinedFeature(feat) => write!(f, "Could not find feature `{feat}`"),
+            Self::UndefinedParameter(param) => write!(f, "Could not find parameter `{param}`"),
+            Self::UndefinedParameterVariant(param, var) => {
+                write!(f, "Could not find variant `{var}` in parameter `{param}`")
+            }
+            Self::UndefinedCharacter(c) => write!(f, "Could not find character `{c}`"),
+            Self::UndefinedLanguage(lang) => write!(f, "Could not find language `{lang}`"),
+            Self::UndefinedDiacritic(dia) => write!(f, "Could not find diacritic `◌{dia}`"),
 
             Self::Redefinition => write!(f, "Attempted to redefine something"),
             Self::InvalidDiacriticDef => write!(
@@ -79,8 +77,7 @@ impl Display for ParseErrorType {
             ),
             Self::AlreadyDefinedEvolution(input, output) => write!(
                 f,
-                "An evolution from `{}` to `{}` has already been defined",
-                input, output
+                "An evolution from `{input}` to `{output}` has already been defined"
             ),
             Self::NegativeParameterInPhoneme => write!(
                 f,
@@ -99,7 +96,7 @@ impl Display for ParseErrorType {
             ),
             Self::MisplacedNot => write!(f, "There is no matcher for this not to be applied to"),
             Self::MultipleTargets => write!(f, "There are multiple targets in the environment"),
-            Self::UnexpectedToken(token) => write!(f, "Unexpected token {:?}", token),
+            Self::UnexpectedToken(token) => write!(f, "Unexpected token {token:?}"),
         }
     }
 }

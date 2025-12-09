@@ -10,6 +10,7 @@ use crate::error_handling::{
 use crate::evolution::{Environment, EnvironmentAtom, InputAtom, Rule};
 use crate::phonemes::{Attribute, Filter, Phoneme, Selector, SelectorCode, UnboundPhoneme};
 
+#[allow(clippy::enum_glob_use)]
 use errors::ParseErrorType::*;
 use lexer::{Lexer, RawToken, Token};
 
@@ -43,7 +44,7 @@ fn parse_unwrapped_word(
                 Err(mut errs) => errors.append(&mut errs),
             },
             RawToken::UnmarkedIdentifier(ident) => {
-                match parse_character(config, ident, &token.pos) {
+                match parse_character(config, &ident, &token.pos) {
                     Ok(phoneme) => phonemes.push(phoneme),
                     Err(mut errs) => errors.append(&mut errs),
                 }
@@ -90,7 +91,7 @@ fn parse_languages(
     config: &mut Config,
     pos: &FilePosition,
 ) -> ResultV<()> {
-    confirm_token_type(file, RawToken::BlockOpen, ExpectedBlock, pos)?;
+    confirm_token_type(file, &RawToken::BlockOpen, ExpectedBlock, pos)?;
     let languages = parse_identifier_block(file)?;
 
     if config.first_language.is_none() {
@@ -111,7 +112,7 @@ fn parse_features(
     config: &mut Config,
     pos: &FilePosition,
 ) -> ResultV<()> {
-    confirm_token_type(file, RawToken::BlockOpen, ExpectedBlock, pos)?;
+    confirm_token_type(file, &RawToken::BlockOpen, ExpectedBlock, pos)?;
     let features = parse_identifier_block(file)?;
 
     config.features.extend(features);
@@ -124,7 +125,7 @@ fn parse_parameters(
     config: &mut Config,
     pos: &FilePosition,
 ) -> ResultV<()> {
-    confirm_token_type(file, RawToken::BlockOpen, ExpectedBlock, pos)?;
+    confirm_token_type(file, &RawToken::BlockOpen, ExpectedBlock, pos)?;
 
     let mut errors: Vec<Error> = Vec::new();
 
@@ -152,7 +153,7 @@ fn parse_parameter_def(
         return Err(ExpectedIdentifier.at(name_token.pos).into());
     };
 
-    confirm_token_type(file, RawToken::BlockOpen, ExpectedBlock, &name_token.pos)?;
+    confirm_token_type(file, &RawToken::BlockOpen, ExpectedBlock, &name_token.pos)?;
     let variant_labels = parse_identifier_block(file)?;
 
     if config.parameters.add(name, variant_labels).is_err() {
@@ -169,7 +170,7 @@ fn parse_characters(
 ) -> ResultV<()> {
     let mut errors = Vec::new();
 
-    confirm_token_type(file, RawToken::BlockOpen, ExpectedBlock, pos)?;
+    confirm_token_type(file, &RawToken::BlockOpen, ExpectedBlock, pos)?;
     let mut def_block = file.take_while(end_block);
     while let Some(token) = def_block.next() {
         if token.token == RawToken::BlockClose {
@@ -204,7 +205,7 @@ fn parse_character_def(
 
     confirm_token_type(
         file,
-        RawToken::PhonemeOpen,
+        &RawToken::PhonemeOpen,
         ExpectedPhoneme,
         &char_token.pos,
     )?;
@@ -231,7 +232,7 @@ fn parse_diacritics(
 ) -> ResultV<()> {
     let mut errors = Vec::new();
 
-    confirm_token_type(file, RawToken::BlockOpen, ExpectedBlock, pos)?;
+    confirm_token_type(file, &RawToken::BlockOpen, ExpectedBlock, pos)?;
     let mut def_block = file.take_while(end_block);
     while let Some(token) = def_block.next() {
         if token.token == RawToken::Eol {
@@ -286,7 +287,7 @@ fn parse_diacritic_def(
     config
         .diacritics
         .add(diacritic, attribute)
-        .map_err(|_| Redefinition.at(dia_token.pos).into())
+        .map_err(|()| Redefinition.at(dia_token.pos).into())
 }
 
 fn parse_evolve(
@@ -296,13 +297,13 @@ fn parse_evolve(
 ) -> ResultV<()> {
     let input_language = read_language(file, config, pos)?;
 
-    confirm_token_type(file, RawToken::To, ExpectedTo, pos)?;
+    confirm_token_type(file, &RawToken::To, ExpectedTo, pos)?;
 
     let output_language = read_language(file, config, pos)?;
 
     let mut errors = Vec::new();
     let mut rules = Vec::new();
-    confirm_token_type(file, RawToken::BlockOpen, ExpectedBlock, pos)?;
+    confirm_token_type(file, &RawToken::BlockOpen, ExpectedBlock, pos)?;
     let mut block_iter = file.take_while(end_block).peekable();
     while block_iter.peek().is_some() {
         let mut line_iter = (&mut block_iter).take_while(|t| t.token != RawToken::Eol);
@@ -382,7 +383,7 @@ fn parse_evolution_rule(
                 Ok(phoneme) => input.push(InputAtom::Phoneme(phoneme)),
                 Err(mut errs) => errors.append(&mut errs),
             },
-            RawToken::UnmarkedIdentifier(ident) => match parse_character(config, ident, pos) {
+            RawToken::UnmarkedIdentifier(ident) => match parse_character(config, &ident, pos) {
                 Ok(phoneme) => input.push(InputAtom::Phoneme(phoneme)),
                 Err(mut errs) => errors.append(&mut errs),
             },
@@ -396,7 +397,7 @@ fn parse_evolution_rule(
     while let Some(token) = output_iter.next() {
         match token.token {
             RawToken::UnmarkedIdentifier(ident) => {
-                match parse_character(config, ident, &token.pos) {
+                match parse_character(config, &ident, &token.pos) {
                     Ok(phoneme) => output.push(phoneme),
                     Err(mut err) => errors.append(&mut err),
                 }
@@ -468,35 +469,35 @@ fn parse_evolution_environment(
                 Err(mut errs) => errors.append(&mut errs),
             },
             RawToken::UnmarkedIdentifier(ident) => {
-                match parse_character(config, ident, &last_pos) {
+                match parse_character(config, &ident, &last_pos) {
                     Ok(phoneme) => pre_environment.push(EnvironmentAtom::Phoneme(phoneme)),
                     Err(mut errs) => errors.append(&mut errs),
                 }
             }
             RawToken::Optional => {
-                if !pre_environment.is_empty() {
+                if pre_environment.is_empty() {
+                    errors.push(MisplacedOptional.at(last_pos.clone()));
+                } else {
                     let new_atom =
                         EnvironmentAtom::Optional(Box::new(pre_environment.pop().unwrap()));
                     pre_environment.push(new_atom);
-                } else {
-                    errors.push(MisplacedOptional.at(last_pos.clone()));
                 }
             }
             RawToken::ZeroOrMore => {
-                if !pre_environment.is_empty() {
+                if pre_environment.is_empty() {
+                    errors.push(MisplacedZeroOrMore.at(last_pos.clone()));
+                } else {
                     let new_atom =
                         EnvironmentAtom::ZeroOrMore(Box::new(pre_environment.pop().unwrap()));
                     pre_environment.push(new_atom);
-                } else {
-                    errors.push(MisplacedZeroOrMore.at(last_pos.clone()));
                 }
             }
             RawToken::Not => {
-                if !pre_environment.is_empty() {
+                if pre_environment.is_empty() {
+                    errors.push(MisplacedNot.at(last_pos.clone()));
+                } else {
                     let new_atom = EnvironmentAtom::Not(Box::new(pre_environment.pop().unwrap()));
                     pre_environment.push(new_atom);
-                } else {
-                    errors.push(MisplacedNot.at(last_pos.clone()));
                 }
             }
             RawToken::WordBoundry => {
@@ -532,36 +533,36 @@ fn parse_evolution_environment(
                 Err(mut errs) => errors.append(&mut errs),
             },
             RawToken::UnmarkedIdentifier(ident) => {
-                match parse_character(config, ident, &token.pos) {
+                match parse_character(config, &ident, &token.pos) {
                     Ok(phoneme) => post_environment.push(EnvironmentAtom::Phoneme(phoneme)),
                     Err(mut errs) => errors.append(&mut errs),
                 }
             }
             RawToken::Optional => {
-                if !post_environment.is_empty() {
+                if post_environment.is_empty() {
+                    errors.push(MisplacedOptional.at(token.pos));
+                } else {
                     let new_atom =
                         EnvironmentAtom::Optional(Box::new(post_environment.pop().unwrap()));
                     post_environment.push(new_atom);
-                } else {
-                    errors.push(MisplacedOptional.at(token.pos));
                 }
             }
             RawToken::ZeroOrMore => {
-                if !post_environment.is_empty() {
+                if post_environment.is_empty() {
+                    errors.push(MisplacedZeroOrMore.at(token.pos));
+                } else {
                     let new_atom =
                         EnvironmentAtom::ZeroOrMore(Box::new(post_environment.pop().unwrap()));
                     post_environment.push(new_atom);
-                } else {
-                    errors.push(MisplacedZeroOrMore.at(token.pos));
                 }
             }
             RawToken::Not => {
-                if !post_environment.is_empty() {
+                if post_environment.is_empty() {
+                    errors.push(MisplacedNot.at(token.pos));
+                } else {
                     let new_atom =
                         EnvironmentAtom::ZeroOrMore(Box::new(post_environment.pop().unwrap()));
                     post_environment.push(new_atom);
-                } else {
-                    errors.push(MisplacedNot.at(token.pos));
                 }
             }
             RawToken::WordBoundry => match_word_end_pos = Some(token.pos),
@@ -641,9 +642,10 @@ fn parse_attribute_list(
     config: &Config,
     is_phoneme: bool,
 ) -> ResultV<Vec<Attribute>> {
-    let close_token = match is_phoneme {
-        true => RawToken::PhonemeClose,
-        false => RawToken::FilterSelectorClose,
+    let close_token = if is_phoneme {
+        RawToken::PhonemeClose
+    } else {
+        RawToken::FilterSelectorClose
     };
 
     let (attributes, errors): (Vec<_>, Vec<_>) = file
@@ -661,7 +663,7 @@ fn parse_attribute(config: &Config, token: Token, allow_neg_param: bool) -> Resu
             parse_parameter(config, mark, param, variant, &token.pos, allow_neg_param)?
         }
         RawToken::UnmarkedIdentifier(character) => {
-            Attribute::Phoneme(parse_character(config, character, &token.pos)?)
+            Attribute::Phoneme(parse_character(config, &character, &token.pos)?)
         }
         RawToken::SelectorCode(code) => Attribute::Selection(code),
         unexpected => return Err(UnexpectedToken(unexpected).at(token.pos).into()),
@@ -702,7 +704,7 @@ fn parse_parameter(
 
 fn parse_character<T: FromIterator<Attribute>>(
     config: &Config,
-    identifier: String,
+    identifier: &str,
     pos: &FilePosition,
 ) -> ResultV<T> {
     let mut ident_chars = identifier.chars().peekable();
@@ -746,7 +748,7 @@ fn parse_base_character(
 // If FileLexer gives an IO error, this function will consume and return it
 fn confirm_token_type(
     file: &mut impl Iterator<Item = Token>,
-    desired: RawToken,
+    desired: &RawToken,
     error: errors::ParseErrorType,
     pos: &FilePosition,
 ) -> Result<()> {
@@ -754,7 +756,7 @@ fn confirm_token_type(
         return Err(error.at(pos.clone()));
     };
 
-    if token.token == desired {
+    if token.token == *desired {
         Ok(())
     } else {
         Err(error.at(token.pos))

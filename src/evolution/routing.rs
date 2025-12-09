@@ -32,6 +32,7 @@ impl std::fmt::Display for RoutingErrorType {
     }
 }
 
+#[allow(clippy::enum_glob_use)]
 use RoutingErrorType::*;
 
 pub fn find_route(

@@ -43,9 +43,9 @@ impl Display for Attribute {
                 write!(f, "{}{}.{}", mark_char(*mark), param, var)
             }
             Attribute::Character(definition) => write!(f, "{}", definition.symbol),
-            Attribute::Selection(code) => write!(f, "{}", code),
-            Attribute::Phoneme(phoneme) => write!(f, "{}", phoneme),
-            Attribute::Display(display) => write!(f, "{}", display),
+            Attribute::Selection(code) => write!(f, "{code}"),
+            Attribute::Phoneme(phoneme) => write!(f, "{phoneme}"),
+            Attribute::Display(display) => write!(f, "{display}"),
         }
     }
 }
@@ -66,9 +66,9 @@ impl Phoneme {
         }
     }
 
-    pub fn add_character(&mut self, character: Character) {
+    pub fn add_character(&mut self, character: &Character) {
         if self.base.is_none() {
-            self.set_base(&character);
+            self.set_base(character);
         }
         self.add_phoneme(character.phoneme.clone());
     }
@@ -90,7 +90,7 @@ impl Phoneme {
                 self.parameters.insert(param, variant);
             }
             Attribute::Character(definition) => {
-                self.add_character(definition);
+                self.add_character(&definition);
             }
             Attribute::Phoneme(phoneme) => {
                 self.add_phoneme(phoneme);
@@ -126,7 +126,7 @@ impl Phoneme {
             attrs.push(Attribute::Display(base_value.symbol.clone()));
         }
 
-        for (param, self_value) in self.parameters.iter() {
+        for (param, self_value) in &self.parameters {
             if !no_base
                 && let Some(ref base) = self.base
                 && let Some(base_value) = base.phoneme.parameters.get(param)
@@ -142,7 +142,7 @@ impl Phoneme {
             ));
         }
 
-        for (feat, self_value) in self.features.iter() {
+        for (feat, self_value) in &self.features {
             if !no_base
                 && let Some(ref base) = self.base
                 && let Some(base_value) = base.phoneme.features.get(feat)
@@ -256,7 +256,7 @@ impl Display for Phoneme {
         if attrs.len() == 1
             && let Attribute::Display(character) = &attrs[0]
         {
-            return write!(f, "{}", character);
+            return write!(f, "{character}");
         }
 
         write!(f, "[{}]", attrs.iter().join(" "))
@@ -295,10 +295,10 @@ impl Display for UnboundPhoneme {
         let attributes_strs = self
             .attributes
             .iter()
-            .map(|attr| format!("{}", attr))
+            .map(|attr| format!("{attr}"))
             .join(" ");
 
-        write!(f, "[{}]", attributes_strs)
+        write!(f, "[{attributes_strs}]")
     }
 }
 

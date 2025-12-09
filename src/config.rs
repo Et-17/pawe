@@ -219,7 +219,7 @@ impl DiacriticMap {
             }
             _ => None,
         }
-        .cloned()
+        .copied()
     }
 
     pub fn has_attribute(&self, attribute: &Attribute) -> bool {

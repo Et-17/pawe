@@ -65,6 +65,7 @@ pub struct EvolveArgs {
     pub output: EvolutionOutputArgs,
 }
 
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Args, Debug)]
 #[command(next_help_heading = "Output")]
 pub struct EvolutionOutputArgs {

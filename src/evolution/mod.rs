@@ -95,15 +95,15 @@ pub struct Rule {
 impl Display for Rule {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for atom in &self.input {
-            write!(f, "{} ", atom)?;
+            write!(f, "{atom} ")?;
         }
         write!(f, ">")?;
         for atom in &self.output {
-            write!(f, " {}", atom)?;
+            write!(f, " {atom}")?;
         }
 
         if let Some(env) = &self.environment {
-            write!(f, " / {}", env)?;
+            write!(f, " / {env}")?;
         }
 
         Ok(())
@@ -118,10 +118,10 @@ pub fn do_rule(
     character_table: &HashMap<String, Character>,
     diacritic_table: &DiacriticMap,
 ) -> Option<Vec<Phoneme>> {
-    _do_rule(word, rule, character_table, diacritic_table, 0)
+    do_rule_i(word, rule, character_table, diacritic_table, 0)
 }
 
-fn _do_rule(
+fn do_rule_i(
     word: &[Phoneme],
     rule: &Rule,
     character_table: &HashMap<String, Character>,
@@ -144,12 +144,12 @@ fn _do_rule(
 
     match do_rule_from_pos(word, rule, character_table, diacritic_table, start) {
         Some(new_word) => {
-            match _do_rule(&new_word, rule, character_table, diacritic_table, start + 1) {
+            match do_rule_i(&new_word, rule, character_table, diacritic_table, start + 1) {
                 Some(new_word2) => Some(new_word2),
                 None => Some(new_word),
             }
         }
-        None => _do_rule(word, rule, character_table, diacritic_table, start + 1),
+        None => do_rule_i(word, rule, character_table, diacritic_table, start + 1),
     }
 }
 
@@ -288,9 +288,9 @@ pub fn match_input<'a>(
         }
     }
 
-    if end != start + input.len() {
-        None
-    } else {
+    if end == start + input.len() {
         Some((end, selection_map))
+    } else {
+        None
     }
 }

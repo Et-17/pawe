@@ -47,6 +47,7 @@ impl std::fmt::Display for CliErrorType {
     }
 }
 
+#[allow(clippy::enum_glob_use)]
 use CliErrorType::*;
 
 pub fn do_cli() -> ResultV<()> {
@@ -61,8 +62,8 @@ pub fn do_cli() -> ResultV<()> {
     }
 
     match args.command {
-        Command::Evolve(e_args) => evolve(e_args, args.config),
-        Command::Tree(t_args) => tree(t_args, args.config),
+        Command::Evolve(e_args) => evolve(&e_args, args.config),
+        Command::Tree(t_args) => tree(&t_args, args.config),
     }
 }
 
@@ -95,18 +96,19 @@ fn verify_config_existence(path: PathBuf) -> Result<PathBuf> {
     }
 }
 
-// This is for filling in optional parameters with automatic values that might
-// not exist. If it doesn't, it uses the default of the type. Which ever it goes
-// with, this will clone it before returning it.
-fn fill_in_param<T: Default + Clone>(param: &Option<T>, fill_in: &Option<T>) -> T {
+// // This is for filling in optional parameters with automatic values that might
+// // not exist. If it doesn't, it uses the default of the type. Which ever it goes
+// // with, this will convert it to owned before returning.
+#[allow(clippy::ref_option)]
+fn fill_in_param<T: ToOwned<Owned = O>, O: Default>(param: &Option<T>, fill_in: &Option<T>) -> O {
     param
         .as_ref()
         .or(fill_in.as_ref())
-        .cloned()
+        .map(ToOwned::to_owned)
         .unwrap_or_default()
 }
 
-fn evolve(args: EvolveArgs, config_args: ConfigArgs) -> ResultV<()> {
+fn evolve(args: &EvolveArgs, config_args: ConfigArgs) -> ResultV<()> {
     let config_path = find_config_file(config_args)?;
     let config = parse_config_file(config_path)?;
     let mut word = parse_word(&args.word, &config)?;
@@ -158,7 +160,7 @@ fn do_evolution_step(
     word
 }
 
-fn tree(args: TreeArgs, config_args: ConfigArgs) -> ResultV<()> {
+fn tree(args: &TreeArgs, config_args: ConfigArgs) -> ResultV<()> {
     let config_path = find_config_file(config_args)?;
     let config = parse_config_file(config_path)?;
     let word = parse_word(&args.word, &config)?;
@@ -168,7 +170,7 @@ fn tree(args: TreeArgs, config_args: ConfigArgs) -> ResultV<()> {
         return Err(UndefinedLanguage(start_name).sign().into());
     };
 
-    let result_tree = gen_tree(word, start, 0, &args, &config);
+    let result_tree = gen_tree(word, start, 0, args, &config);
 
     output::display_tree(&result_tree);
 

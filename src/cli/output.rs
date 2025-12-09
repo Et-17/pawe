@@ -10,7 +10,7 @@ pub fn display_label<T: Display>(text: T, args: &EvolutionOutputArgs) {
         return;
     }
 
-    println!("{}", text);
+    println!("{text}");
 }
 
 pub fn display_evolution_label<T: Display>(start: &T, end: &T, args: &EvolutionOutputArgs) {
@@ -23,7 +23,7 @@ pub fn display_evolution_label<T: Display>(start: &T, end: &T, args: &EvolutionO
 
 pub fn display_word(word: &[Phoneme]) {
     for character in word {
-        print!("{}", character);
+        print!("{character}");
     }
 }
 
@@ -56,7 +56,7 @@ fn display_rule(rule: &Rule, args: &EvolutionOutputArgs) {
         print!("    ");
     }
 
-    println!("// {}", rule);
+    println!("// {rule}");
 }
 
 pub fn display_application(
