@@ -30,4 +30,4 @@ Because different tasks and different researchers need different things, Pawe ha
 - The word can be shown after every change instead of just at the end of languages with `--changes` or `-c`
 - The result of every rule, not only effective ones, can be displayed with  `--all-results` or `-a`
 - Reduction of phonemes to a base character for display can be disabled with `--no-base`
-- Input and output normalization can be disabled with `--no-normalization`
+- Input normalization can be disabled with `--raw-input`

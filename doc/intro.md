@@ -35,9 +35,9 @@ A phoneme is a definite collection of attributes that, in theory, represents a p
 
 ### Filters
 
-Anywhere where you are "matching" phonemes, such as in the input of a rule or in the environment, you can use a filter instead of a full phoneme. They let you pass a set of attributes, and it will match anything that fulfills all of those attributes, regardless of what the rest of it is. This is where negative parameters come in: if you put a negative parameter in a filter, it will match anything that is *not* the specified variant. Unfortunately, parameter attributes in filters will also override like in phonemes, so you can only match either a single negative or positive variant for each parameter. This will be changed in later versions.
+Anywhere where you are "matching" phonemes, such as in the input of a rule or in the environment, you can use a filter instead of a full phoneme. They let you pass a set of attributes, and it will match anything that fulfills all of those attributes, regardless of what the rest of it is. This is where negative parameters come in: if you put a negative parameter in a filter, it will match anything that is *not* the specified variant. Filters will consider all passed parameters instead of overriding older ones, allowing you to specify multiple negative parameter variants that must be fulfilled.
 
-Filters are defined with a space separated list of attributes inside of `(...)`. They can also be passed characters and selected phonemes, like phoneme atoms. For example, if you wanted to match all rounded vowels, you could write `(+type.vowel +rounded)`. If you want to match all consonants that are not velar, you could write `(+type.consonant -place.velar)`.
+Filters are defined with a space separated list of attributes inside of `(...)`. They can also be passed characters and selected phonemes, like phoneme atoms. For example, if you wanted to match all rounded vowels, you could write `(+type.vowel +rounded)`. If you want to match all consonants that are not velar or uvular, you could write `(+type.consonant -place.velar -place.uvular)`.
 
 ### Selectors
 

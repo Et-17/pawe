@@ -317,7 +317,7 @@ impl Display for Selector {
 #[derive(Debug)]
 pub struct Filter {
     pub features: HashMap<Label, bool>,
-    pub parameters: HashMap<Label, (bool, Label)>,
+    pub parameters: HashMap<Label, Vec<(bool, Label)>>,
 }
 
 impl Filter {
@@ -335,7 +335,10 @@ impl Filter {
                 self.features.insert(feat, mark);
             }
             Attribute::Parameter(mark, param, variant) => {
-                self.parameters.insert(param, (mark, variant));
+                self.parameters
+                    .entry(param)
+                    .or_default()
+                    .push((mark, variant));
             }
             _ => (),
         }
@@ -353,13 +356,13 @@ impl Filter {
     }
 
     fn parameters_matches(
-        pattern: &HashMap<Label, (bool, Label)>,
+        pattern: &HashMap<Label, Vec<(bool, Label)>>,
         other: &HashMap<Label, Label>,
     ) -> bool {
-        pattern.iter().all(|(param, (mark, var))| {
-            other
-                .get(param)
-                .is_some_and(|o_var| (var == o_var) == *mark)
+        pattern.iter().all(|(param, variants)| {
+            variants
+                .iter()
+                .all(|(mark, var)| other.get(param).is_some_and(|o| (var == o) == *mark))
         })
     }
 }
@@ -387,6 +390,7 @@ impl Display for Filter {
             .parameters
             .iter()
             .sorted_by_key(|x| x.0.code)
+            .flat_map(|(param, variants)| variants.iter().map(move |var| (param, var)))
             .map(|(param, (mark, var))| format!("{}{}.{}", mark_char(*mark), param, var));
 
         write!(f, "({})", features_strs.chain(parameter_strs).join(" "))

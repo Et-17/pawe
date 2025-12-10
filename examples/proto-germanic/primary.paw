@@ -176,7 +176,8 @@ evolve PreProtoGermanic to EarlyProtoGermanic {
 
 	// Grimm's law <3
 	// Voiceless plosives become fricatives, unless preceeded by an obstruent
-	1(+type.consonant -voiced +manner.plosive) > [1 +manner.fricative] / (-manner.plosive -manner.fricative) _;
+	1(+type.consonant -voiced +manner.plosive) > [1 +manner.fricative] / (-type.consonant) _;
+	1(+type.consonant -voiced +manner.plosive) > [1 +manner.fricative] / (+type.consonant -manner.plosive -manner.fricative) _;
 	1(+type.consonant -voiced +manner.plosive) > [1 +manner.fricative] / # _;
 	// Voiced plosives are devoiced
 	1(+type.consonant +voiced +manner.plosive -aspirated) > [1 -voiced];
