@@ -50,26 +50,26 @@ impl FilePosition {
 pub trait ErrorType: Display + Debug {
     fn module(&self) -> String;
 
-    fn at(self, pos: FilePosition) -> Error
+    fn at<T: From<Error>>(self, pos: FilePosition) -> T
     where
         Self: Sized + 'static,
     {
-        Error {
+        T::from(Error {
             pos: Some(pos),
             module: self.module(),
             internal: Box::new(self),
-        }
+        })
     }
 
-    fn sign(self) -> Error
+    fn sign<T: From<Error>>(self) -> T
     where
         Self: Sized + 'static,
     {
-        Error {
+        T::from(Error {
             pos: None,
             module: self.module(),
             internal: Box::new(self),
-        }
+        })
     }
 }
 

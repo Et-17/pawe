@@ -8,7 +8,7 @@ use crate::error_handling::{
     Error, ErrorType, FilePosition, Result, ResultV, check_errors, wrap_io_error,
 };
 use crate::evolution::{Environment, EnvironmentAtom, InputAtom, Rule};
-use crate::parser::errors::{Defineable, Expectation, eol_error, unexpect};
+use crate::parser::errors::{Defineable, Expectation, eof_error, unexpect};
 use crate::phonemes::{Attribute, Filter, Phoneme, Selector, SelectorCode, UnboundPhoneme};
 
 use errors::ParseErrorType::*;
@@ -157,9 +157,7 @@ fn parse_parameter_def(
     let variant_labels = parse_identifier_block(file)?;
 
     if config.parameters.add(name.clone(), variant_labels).is_err() {
-        return Err(Redefinition(Defineable::Parameter(name))
-            .at(name_token.pos)
-            .into());
+        return Err(Redefinition(Defineable::Parameter(name)).at(name_token.pos));
     }
 
     Ok(())
@@ -216,9 +214,7 @@ fn parse_character_def(
         )
         .is_some()
     {
-        return Err(Redefinition(Defineable::Character(char))
-            .at(char_token.pos)
-            .into());
+        return Err(Redefinition(Defineable::Character(char)).at(char_token.pos));
     }
 
     Ok(())
@@ -266,28 +262,25 @@ fn parse_diacritic_def(
     };
 
     let Some((_, diacritic_str)) = def_str.split_at_checked(1) else {
-        return Err(InvalidDiacriticDef.at(dia_token.pos).into());
+        return Err(InvalidDiacriticDef.at(dia_token.pos));
     };
 
     if diacritic_str.chars().count() > 1 {
-        return Err(DiacriticTooLong(diacritic_str.into())
-            .at(dia_token.pos)
-            .into());
+        return Err(DiacriticTooLong(diacritic_str.into()).at(dia_token.pos));
     }
     let Some(diacritic) = diacritic_str.chars().next() else {
-        return Err(InvalidDiacriticDef.at(dia_token.pos).into());
+        return Err(InvalidDiacriticDef.at(dia_token.pos));
     };
 
     let Some(next_token) = file.next() else {
-        return Err(eol_error(dia_token.pos, Expectation::Attribute));
+        return Err(eof_error(dia_token.pos, Expectation::Attribute));
     };
     let attribute = parse_attribute(config, next_token, true)?;
 
-    config.diacritics.add(diacritic, attribute).map_err(|()| {
-        Redefinition(Defineable::Diacritic(diacritic))
-            .at(dia_token.pos)
-            .into()
-    })
+    config
+        .diacritics
+        .add(diacritic, attribute)
+        .map_err(|()| Redefinition(Defineable::Diacritic(diacritic)).at(dia_token.pos))
 }
 
 fn parse_evolve(
@@ -328,8 +321,7 @@ fn parse_evolve(
             input_language.to_string(),
             output_language.to_string(),
         ))
-        .at(pos.clone())
-        .into());
+        .at(pos.clone()));
     }
 
     config
@@ -347,7 +339,7 @@ fn read_language(
     pos: &FilePosition,
 ) -> Result<Label> {
     let Some(language_token) = file.next() else {
-        return Err(eol_error(pos.clone(), Expectation::Identifier));
+        return Err(eof_error(pos.clone(), Expectation::Identifier));
     };
 
     let RawToken::UnmarkedIdentifier(language_name) = language_token.token else {
@@ -473,7 +465,7 @@ fn parse_evolution_environment(
             ..
         }) => (),
         Some(token) => errors.push(unexpect(token, RawToken::Target)),
-        None => errors.push(eol_error(last_pos, RawToken::Target)),
+        None => errors.push(eof_error(last_pos, RawToken::Target)),
     }
 
     let raw_post: Vec<_> = splitting_iter.collect();
@@ -533,8 +525,8 @@ fn parse_environment_atom(
         }
         RawToken::Not => bundle_special_atom(previous, Not, RawToken::Not, token.pos),
 
-        RawToken::WordBoundry => Err(MisplacedWordBoundary.at(token.pos).into()),
-        RawToken::Target => Err(ExcessTargets.at(token.pos).into()),
+        RawToken::WordBoundry => Err(MisplacedWordBoundary.at(token.pos)),
+        RawToken::Target => Err(ExcessTargets.at(token.pos)),
         _ => Err(unexpect(token, Expectation::EnvironmentAtom)),
     })
 }
@@ -546,7 +538,7 @@ fn bundle_special_atom<E: From<Error>>(
     pos: FilePosition,
 ) -> std::result::Result<EnvironmentAtom, E> {
     let Some(argument) = previous.pop() else {
-        return Err(InvalidSpecialAtom(raw).at(pos).into());
+        return Err(InvalidSpecialAtom(raw).at(pos));
     };
 
     Ok(bundler(argument.into()))
@@ -725,7 +717,7 @@ fn confirm_token_type(
     pos: &FilePosition,
 ) -> Result<()> {
     let Some(token) = file.next() else {
-        return Err(eol_error(pos.clone(), desired));
+        return Err(eof_error(pos.clone(), desired));
     };
 
     if token.token == desired {

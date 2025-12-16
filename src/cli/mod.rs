@@ -166,7 +166,7 @@ fn tree(args: &TreeArgs, config_args: ConfigArgs) -> ResultV<()> {
 
     let start_name = fill_in_param(&args.start, &config.first_language);
     let Some(start) = config.languages.encode(&start_name) else {
-        return Err(UndefinedLanguage(start_name).sign().into());
+        return Err(UndefinedLanguage(start_name).sign());
     };
 
     let result_tree = gen_tree(word, start, 0, args, &config);

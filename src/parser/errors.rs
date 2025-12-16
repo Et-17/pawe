@@ -121,6 +121,6 @@ pub fn unexpect<T: Into<Expectation>, O: From<Error>>(found: Token, expected: T)
     O::from(ParseErrorType::Unexpected(Some(found.token), expected.into()).at(found.pos))
 }
 
-pub fn eol_error<T: Into<Expectation>, O: From<Error>>(pos: FilePosition, expected: T) -> O {
+pub fn eof_error<T: Into<Expectation>, O: From<Error>>(pos: FilePosition, expected: T) -> O {
     O::from(ParseErrorType::Unexpected(None, expected.into()).at(pos))
 }
