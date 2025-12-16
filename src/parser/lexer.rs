@@ -130,6 +130,85 @@ pub enum RawToken {
     UnknownCharacter(char),
 }
 
+impl RawToken {
+    fn type_name(&self) -> &'static str {
+        match self {
+            RawToken::Languages
+            | RawToken::Parameters
+            | RawToken::Features
+            | RawToken::Characters
+            | RawToken::Diacritics
+            | RawToken::Evolve
+            | RawToken::To => "",
+            RawToken::Output => "output",
+            RawToken::Environment => "environment",
+            RawToken::Target => "target",
+            RawToken::WordBoundry => "word-boundary",
+            RawToken::Optional => "optional",
+            RawToken::ZeroOrMore => "zero-or-more",
+            RawToken::Not => "not",
+            RawToken::Eol => "line-terminator",
+            RawToken::Comment => "comment",
+            RawToken::BlockOpen => "block-open",
+            RawToken::BlockClose => "block-close",
+            RawToken::FilterOpen => "filter-open",
+            RawToken::SelectorOpen(_) => "selector-open",
+            RawToken::FilterSelectorClose => "filter-selector-close",
+            RawToken::PhonemeOpen => "phoneme-open",
+            RawToken::PhonemeClose => "phoneme-close",
+            RawToken::MarkedFeature(_, _) => "feature",
+            RawToken::MarkedParameter(_, _, _) => "parameter",
+            RawToken::SelectorCode(_) => "selector-code",
+            RawToken::UnmarkedIdentifier(_) => "identifier",
+            RawToken::UnknownCharacter(_) => "unknown-char",
+        }
+    }
+}
+
+impl std::fmt::Display for RawToken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = self.type_name();
+
+        if !name.is_empty() {
+            write!(f, "{name} ")?;
+        }
+        write!(f, "`")?;
+        match self {
+            RawToken::Languages => write!(f, "languages"),
+            RawToken::Parameters => write!(f, "parameters"),
+            RawToken::Features => write!(f, "features"),
+            RawToken::Characters => write!(f, "characters"),
+            RawToken::Diacritics => write!(f, "diacritics"),
+            RawToken::Evolve => write!(f, "evolve"),
+            RawToken::To => write!(f, "to"),
+            RawToken::Output => write!(f, ">"),
+            RawToken::Environment => write!(f, "/"),
+            RawToken::Target => write!(f, "_"),
+            RawToken::WordBoundry => write!(f, "#"),
+            RawToken::Optional => write!(f, "?"),
+            RawToken::ZeroOrMore => write!(f, "*"),
+            RawToken::Not => write!(f, "!"),
+            RawToken::Eol => write!(f, ";"),
+            RawToken::Comment => write!(f, "//"),
+            RawToken::BlockOpen => write!(f, "{{"),
+            RawToken::BlockClose => write!(f, "}}"),
+            RawToken::FilterOpen => write!(f, "("),
+            RawToken::SelectorOpen(code) => write!(f, "{code}("),
+            RawToken::FilterSelectorClose => write!(f, ")"),
+            RawToken::PhonemeOpen => write!(f, "["),
+            RawToken::PhonemeClose => write!(f, "]"),
+            RawToken::MarkedFeature(mark, feat) => write!(f, "{}{feat}", display_mark(*mark)),
+            RawToken::MarkedParameter(mark, param, variant) => {
+                write!(f, "{}{param}{variant}", display_mark(*mark))
+            }
+            RawToken::SelectorCode(code) => write!(f, "{code}"),
+            RawToken::UnmarkedIdentifier(ident) => write!(f, "{ident}"),
+            RawToken::UnknownCharacter(ch) => write!(f, "{ch}"),
+        }?;
+        write!(f, "`")
+    }
+}
+
 fn mark_token(token: RawToken, pos: FilePosition) -> Token {
     Token { token, pos }
 }
@@ -278,4 +357,8 @@ fn test_comment<T: Iterator<Item = MarkedChar>>(line: &mut Peekable<T>) -> RawTo
     } else {
         RawToken::Environment
     }
+}
+
+fn display_mark(mark: bool) -> char {
+    if mark { '+' } else { '-' }
 }

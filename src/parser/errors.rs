@@ -1,39 +1,81 @@
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
-use crate::error_handling::ErrorType;
+use crate::error_handling::{Error, ErrorType, FilePosition};
 
-use super::lexer::RawToken;
+use super::lexer::{RawToken, Token};
+
+#[derive(Debug)]
+pub enum Defineable {
+    Language(String),
+    Feature(String),
+    Parameter(String),
+    ParameterVariant(String, String),
+    Character(String),
+    Diacritic(char),
+    Evolution(String, String),
+}
+
+#[derive(Debug)]
+pub enum Expectation {
+    Attribute,
+    DefinitionKeyword,
+    OutputAtom,
+    EnvironmentAtom,
+    InputAtom,
+    WordAtom,
+    Identifier,
+    Token(RawToken),
+}
+
+impl Display for Defineable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Language(lang) => write!(f, "language `{lang}`"),
+            Self::Feature(feat) => write!(f, "feature `{feat}`"),
+            Self::Parameter(param) => write!(f, "parameter `{param}`"),
+            Self::ParameterVariant(param, var) => {
+                write!(f, "variant `{var}` in parameter `{param}`")
+            }
+            Self::Character(character) => write!(f, "character `{character}`"),
+            Self::Diacritic(dia) => write!(f, "diacritic `◌{dia}`"),
+            Self::Evolution(start, end) => write!(f, "evolution from `{start}` to `{end}`"),
+        }
+    }
+}
+
+impl Display for Expectation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Attribute => write!(f, "attribute"),
+            Self::DefinitionKeyword => write!(f, "definition keyword"),
+            Self::OutputAtom => write!(f, "output atom"),
+            Self::EnvironmentAtom => write!(f, "environment atom"),
+            Self::InputAtom => write!(f, "input atom"),
+            Self::WordAtom => write!(f, "word atom"),
+            Self::Identifier => write!(f, "identifier"),
+            Self::Token(token) => write!(f, "{token}"),
+        }
+    }
+}
+
+impl From<RawToken> for Expectation {
+    fn from(value: RawToken) -> Self {
+        Self::Token(value)
+    }
+}
 
 #[derive(Debug)]
 pub enum ParseErrorType {
-    ExpectedBlockIdentifier,
-    ExpectedBlock,
-    ExpectedIdentifier, // empty line in languages or features block
-    ExpectedEOL,
-    ExpectedPhoneme,
-    ExpectedLanguage,
-    ExpectedAttribute,
-    ExpectedTo,
-    MissingTarget,
+    Unexpected(Option<RawToken>, Expectation),
+    Undefined(Defineable),
+    Redefinition(Defineable),
 
-    UndefinedFeature(String),
-    UndefinedParameter(String),
-    UndefinedParameterVariant(String, String),
-    UndefinedCharacter(String),
-    UndefinedLanguage(String),
-    UndefinedDiacritic(char),
-
-    Redefinition, // attempted to redefine something
+    NegativeParameterInPhoneme,
+    InvalidSpecialAtom(RawToken),
+    MisplacedWordBoundary,
+    ExcessTargets,
     InvalidDiacriticDef,
     DiacriticTooLong(String),
-    AlreadyDefinedEvolution(String, String),
-    NegativeParameterInPhoneme,
-    MisplacedWordBoundary,
-    MisplacedOptional,
-    MisplacedZeroOrMore,
-    MisplacedNot,
-    MultipleTargets,
-    UnexpectedToken(RawToken),
 }
 
 impl ErrorType for ParseErrorType {
@@ -45,58 +87,40 @@ impl ErrorType for ParseErrorType {
 impl Display for ParseErrorType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::ExpectedBlockIdentifier => write!(f, "Expected a block identifier keyword"),
-            Self::ExpectedBlock => write!(f, "Expected a block"),
-            Self::ExpectedIdentifier => write!(f, "Expected identifier"),
-            Self::ExpectedEOL => write!(f, "Expected end-of-line"),
-            Self::ExpectedPhoneme => write!(f, "Expected a phoneme"),
-            Self::ExpectedLanguage => write!(f, "Expected a language name"),
-            Self::ExpectedAttribute => write!(f, "Expected an attribute"),
-            Self::ExpectedTo => write!(f, "Expected `to`"),
-            Self::MissingTarget => write!(f, "There is no target in the environment"),
+            Self::Unexpected(found, expected) => match found {
+                Some(token) => write!(f, "expected {expected}, found {token}"),
+                None => write!(f, "expected {expected}"),
+            },
+            Self::Undefined(def) => write!(f, "could not find {def}"),
+            Self::Redefinition(def) => write!(f, "{def} is already defined"),
 
-            Self::UndefinedFeature(feat) => write!(f, "Could not find feature `{feat}`"),
-            Self::UndefinedParameter(param) => write!(f, "Could not find parameter `{param}`"),
-            Self::UndefinedParameterVariant(param, var) => {
-                write!(f, "Could not find variant `{var}` in parameter `{param}`")
+            Self::NegativeParameterInPhoneme => {
+                write!(f, "negative parameters can not be used in a phoneme")
             }
-            Self::UndefinedCharacter(c) => write!(f, "Could not find character `{c}`"),
-            Self::UndefinedLanguage(lang) => write!(f, "Could not find language `{lang}`"),
-            Self::UndefinedDiacritic(dia) => write!(f, "Could not find diacritic `◌{dia}`"),
-
-            Self::Redefinition => write!(f, "Attempted to redefine something"),
-            Self::InvalidDiacriticDef => write!(
-                f,
-                "Diacritics must be specified as an arbitrary base character followed by the diacritic"
-            ),
-            Self::DiacriticTooLong(dia) => write!(
-                f,
-                "Diacritics must be one character long, `◌{}` has {}",
-                dia,
-                dia.chars().count()
-            ),
-            Self::AlreadyDefinedEvolution(input, output) => write!(
-                f,
-                "An evolution from `{input}` to `{output}` has already been defined"
-            ),
-            Self::NegativeParameterInPhoneme => write!(
-                f,
-                "Negative parameters are only allowed in filters and selectors, not phonemes"
-            ),
+            Self::InvalidSpecialAtom(atom) => {
+                write!(f, "{atom} must be preceeded by an environment atom")
+            }
             Self::MisplacedWordBoundary => write!(
                 f,
-                "You can only match word boundaries at the start or end of environments"
+                "word boundaries may only be used at the start and end of the environment"
             ),
-            Self::MisplacedOptional => {
-                write!(f, "There is no matcher for this optional to be applied to")
+            Self::ExcessTargets => write!(f, "found multiple targets in environment"),
+            Self::InvalidDiacriticDef => {
+                write!(f, "a diacritic must be preceeded by an arbitrary character")
             }
-            Self::MisplacedZeroOrMore => write!(
+            Self::DiacriticTooLong(diacritic) => write!(
                 f,
-                "There is no matcher for this zero-or-more to be applied to"
+                "diacritics must be one character long, `◌{diacritic}` has `{}`",
+                diacritic.chars().count()
             ),
-            Self::MisplacedNot => write!(f, "There is no matcher for this not to be applied to"),
-            Self::MultipleTargets => write!(f, "There are multiple targets in the environment"),
-            Self::UnexpectedToken(token) => write!(f, "Unexpected token {token:?}"),
         }
     }
+}
+
+pub fn unexpect<T: Into<Expectation>, O: From<Error>>(found: Token, expected: T) -> O {
+    O::from(ParseErrorType::Unexpected(Some(found.token), expected.into()).at(found.pos))
+}
+
+pub fn eol_error<T: Into<Expectation>, O: From<Error>>(pos: FilePosition, expected: T) -> O {
+    O::from(ParseErrorType::Unexpected(None, expected.into()).at(pos))
 }

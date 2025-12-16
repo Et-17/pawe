@@ -8,6 +8,7 @@ use crate::error_handling::{
     Error, ErrorType, FilePosition, Result, ResultV, check_errors, wrap_io_error,
 };
 use crate::evolution::{Environment, EnvironmentAtom, InputAtom, Rule};
+use crate::parser::errors::{Defineable, Expectation, eol_error, unexpect};
 use crate::phonemes::{Attribute, Filter, Phoneme, Selector, SelectorCode, UnboundPhoneme};
 
 use errors::ParseErrorType::*;
@@ -48,7 +49,7 @@ fn parse_unwrapped_word(
                     Err(mut errs) => errors.append(&mut errs),
                 }
             }
-            unexpected => errors.push(UnexpectedToken(unexpected).sign()),
+            _ => errors.push(unexpect(token, Expectation::WordAtom)),
         }
     }
 
@@ -74,7 +75,7 @@ fn parse_config(file: &mut impl Iterator<Item = Token>) -> ResultV<Config> {
             RawToken::Characters => parse_characters(file, &mut config, pos),
             RawToken::Diacritics => parse_diacritics(file, &mut config, pos),
             RawToken::Evolve => parse_evolve(file, &mut config, pos),
-            _ => Err(ExpectedBlockIdentifier.at(token.pos).into()),
+            _ => Err(unexpect(token, Expectation::DefinitionKeyword)),
         };
 
         if let Err(mut errs) = parsing_result {
@@ -90,7 +91,7 @@ fn parse_languages(
     config: &mut Config,
     pos: &FilePosition,
 ) -> ResultV<()> {
-    confirm_token_type(file, &RawToken::BlockOpen, ExpectedBlock, pos)?;
+    confirm_token_type(file, RawToken::BlockOpen, pos)?;
     let languages = parse_identifier_block(file)?;
 
     if config.first_language.is_none() {
@@ -111,7 +112,7 @@ fn parse_features(
     config: &mut Config,
     pos: &FilePosition,
 ) -> ResultV<()> {
-    confirm_token_type(file, &RawToken::BlockOpen, ExpectedBlock, pos)?;
+    confirm_token_type(file, RawToken::BlockOpen, pos)?;
     let features = parse_identifier_block(file)?;
 
     config.features.extend(features);
@@ -124,7 +125,7 @@ fn parse_parameters(
     config: &mut Config,
     pos: &FilePosition,
 ) -> ResultV<()> {
-    confirm_token_type(file, &RawToken::BlockOpen, ExpectedBlock, pos)?;
+    confirm_token_type(file, RawToken::BlockOpen, pos)?;
 
     let mut errors: Vec<Error> = Vec::new();
 
@@ -149,14 +150,16 @@ fn parse_parameter_def(
     name_token: Token,
 ) -> ResultV<()> {
     let RawToken::UnmarkedIdentifier(name) = name_token.token else {
-        return Err(ExpectedIdentifier.at(name_token.pos).into());
+        return Err(unexpect(name_token, Expectation::Identifier));
     };
 
-    confirm_token_type(file, &RawToken::BlockOpen, ExpectedBlock, &name_token.pos)?;
+    confirm_token_type(file, RawToken::BlockOpen, &name_token.pos)?;
     let variant_labels = parse_identifier_block(file)?;
 
-    if config.parameters.add(name, variant_labels).is_err() {
-        return Err(Redefinition.at(name_token.pos.clone()).into());
+    if config.parameters.add(name.clone(), variant_labels).is_err() {
+        return Err(Redefinition(Defineable::Parameter(name))
+            .at(name_token.pos)
+            .into());
     }
 
     Ok(())
@@ -169,7 +172,7 @@ fn parse_characters(
 ) -> ResultV<()> {
     let mut errors = Vec::new();
 
-    confirm_token_type(file, &RawToken::BlockOpen, ExpectedBlock, pos)?;
+    confirm_token_type(file, RawToken::BlockOpen, pos)?;
     let mut def_block = file.take_while(end_block);
     while let Some(token) = def_block.next() {
         if token.token == RawToken::BlockClose {
@@ -199,26 +202,23 @@ fn parse_character_def(
     char_token: Token,
 ) -> ResultV<()> {
     let RawToken::UnmarkedIdentifier(char) = char_token.token else {
-        return Err(ExpectedIdentifier.at(char_token.pos).into());
+        return Err(unexpect(char_token, Expectation::Identifier));
     };
 
-    confirm_token_type(
-        file,
-        &RawToken::PhonemeOpen,
-        ExpectedPhoneme,
-        &char_token.pos,
-    )?;
+    confirm_token_type(file, RawToken::PhonemeOpen, &char_token.pos)?;
     let phoneme = parse_phoneme(file, config)?;
 
     if config
         .characters
         .insert(
             char.clone(),
-            Character::new(CharacterDefinition::new(char, phoneme)),
+            Character::new(CharacterDefinition::new(char.clone(), phoneme)),
         )
         .is_some()
     {
-        return Err(Redefinition.at(char_token.pos).into());
+        return Err(Redefinition(Defineable::Character(char))
+            .at(char_token.pos)
+            .into());
     }
 
     Ok(())
@@ -231,7 +231,7 @@ fn parse_diacritics(
 ) -> ResultV<()> {
     let mut errors = Vec::new();
 
-    confirm_token_type(file, &RawToken::BlockOpen, ExpectedBlock, pos)?;
+    confirm_token_type(file, RawToken::BlockOpen, pos)?;
     let mut def_block = file.take_while(end_block);
     while let Some(token) = def_block.next() {
         if token.token == RawToken::Eol {
@@ -262,7 +262,7 @@ fn parse_diacritic_def(
     dia_token: Token,
 ) -> ResultV<()> {
     let RawToken::UnmarkedIdentifier(def_str) = dia_token.token else {
-        return Err(ExpectedIdentifier.at(dia_token.pos).into());
+        return Err(unexpect(dia_token, Expectation::Identifier));
     };
 
     let Some((_, diacritic_str)) = def_str.split_at_checked(1) else {
@@ -279,14 +279,15 @@ fn parse_diacritic_def(
     };
 
     let Some(next_token) = file.next() else {
-        return Err(ExpectedAttribute.at(dia_token.pos).into());
+        return Err(eol_error(dia_token.pos, Expectation::Attribute));
     };
     let attribute = parse_attribute(config, next_token, true)?;
 
-    config
-        .diacritics
-        .add(diacritic, attribute)
-        .map_err(|()| Redefinition.at(dia_token.pos).into())
+    config.diacritics.add(diacritic, attribute).map_err(|()| {
+        Redefinition(Defineable::Diacritic(diacritic))
+            .at(dia_token.pos)
+            .into()
+    })
 }
 
 fn parse_evolve(
@@ -296,13 +297,13 @@ fn parse_evolve(
 ) -> ResultV<()> {
     let input_language = read_language(file, config, pos)?;
 
-    confirm_token_type(file, &RawToken::To, ExpectedTo, pos)?;
+    confirm_token_type(file, RawToken::To, pos)?;
 
     let output_language = read_language(file, config, pos)?;
 
     let mut errors = Vec::new();
     let mut rules = Vec::new();
-    confirm_token_type(file, &RawToken::BlockOpen, ExpectedBlock, pos)?;
+    confirm_token_type(file, RawToken::BlockOpen, pos)?;
     let mut block_iter = file.take_while(end_block).peekable();
     while block_iter.peek().is_some() {
         let mut line_iter = (&mut block_iter).take_while(|t| t.token != RawToken::Eol);
@@ -323,10 +324,10 @@ fn parse_evolve(
         .and_then(|le| le.get(&output_language))
         .is_some();
     if already_defined {
-        return Err(AlreadyDefinedEvolution(
+        return Err(Redefinition(Defineable::Evolution(
             input_language.to_string(),
             output_language.to_string(),
-        )
+        ))
         .at(pos.clone())
         .into());
     }
@@ -346,16 +347,16 @@ fn read_language(
     pos: &FilePosition,
 ) -> Result<Label> {
     let Some(language_token) = file.next() else {
-        return Err(ExpectedLanguage.at(pos.clone()));
+        return Err(eol_error(pos.clone(), Expectation::Identifier));
     };
 
     let RawToken::UnmarkedIdentifier(language_name) = language_token.token else {
-        return Err(ExpectedLanguage.at(language_token.pos.clone()));
+        return Err(unexpect(language_token, Expectation::Identifier));
     };
 
     match config.languages.encode(&language_name) {
         Some(label) => Ok(label),
-        None => Err(UndefinedLanguage(language_name).at(language_token.pos.clone())),
+        None => Err(Undefined(Defineable::Language(language_name)).at(language_token.pos)),
     }
 }
 
@@ -386,7 +387,7 @@ fn parse_evolution_rule(
                 Ok(phoneme) => input.push(InputAtom::Phoneme(phoneme)),
                 Err(mut errs) => errors.append(&mut errs),
             },
-            unexpected => errors.push(UnexpectedToken(unexpected).at(token.pos)),
+            _ => errors.push(unexpect(token, Expectation::InputAtom)),
         }
     }
 
@@ -409,7 +410,7 @@ fn parse_evolution_rule(
                 do_environment = true;
                 break;
             }
-            unexpected => errors.push(UnexpectedToken(unexpected).at(token.pos)),
+            _ => errors.push(unexpect(token, Expectation::OutputAtom)),
         }
     }
 
@@ -440,6 +441,8 @@ fn parse_evolution_environment(
     config: &Config,
     pos: &FilePosition,
 ) -> ResultV<Environment> {
+    let mut errors = Vec::new();
+
     let mut tokens: Vec<Token> = file.take_while(|tok| tok.token != RawToken::Eol).collect();
     let last_pos = tokens.last().map_or(pos, |tok| &tok.pos).clone();
 
@@ -458,20 +461,22 @@ fn parse_evolution_environment(
     }
 
     let mut splitting_iter = tokens.into_iter().peekable();
+
     let raw_pre: Vec<_> = splitting_iter
         .peeking_take_while(|tok| tok.token != RawToken::Target)
         .collect();
-    let target_exists = splitting_iter
-        .next()
-        .is_some_and(|tok| tok.token == RawToken::Target);
-    let raw_post: Vec<_> = splitting_iter.collect();
-    if !target_exists {
-        return Err(MissingTarget.at(last_pos).into());
+    let pre = parse_single_environment(raw_pre, config, &mut errors);
+
+    match splitting_iter.next() {
+        Some(Token {
+            token: RawToken::Target,
+            ..
+        }) => (),
+        Some(token) => errors.push(unexpect(token, RawToken::Target)),
+        None => errors.push(eol_error(last_pos, RawToken::Target)),
     }
 
-    let mut errors = Vec::new();
-
-    let pre = parse_single_environment(raw_pre, config, &mut errors);
+    let raw_post: Vec<_> = splitting_iter.collect();
     let post = parse_single_environment(raw_post, config, &mut errors);
 
     let environment = Environment {
@@ -520,26 +525,28 @@ fn parse_environment_atom(
         RawToken::UnmarkedIdentifier(ident) => {
             parse_character(config, &ident, &token.pos).map(Phoneme)
         }
-        RawToken::Optional => bundle_special_atom(previous, Optional, MisplacedOptional, token.pos),
-        RawToken::ZeroOrMore => {
-            bundle_special_atom(previous, ZeroOrMore, MisplacedZeroOrMore, token.pos)
+        RawToken::Optional => {
+            bundle_special_atom(previous, Optional, RawToken::Optional, token.pos)
         }
-        RawToken::Not => bundle_special_atom(previous, Not, MisplacedNot, token.pos),
+        RawToken::ZeroOrMore => {
+            bundle_special_atom(previous, ZeroOrMore, RawToken::ZeroOrMore, token.pos)
+        }
+        RawToken::Not => bundle_special_atom(previous, Not, RawToken::Not, token.pos),
 
         RawToken::WordBoundry => Err(MisplacedWordBoundary.at(token.pos).into()),
-        RawToken::Target => Err(MultipleTargets.at(token.pos).into()),
-        unexpected => Err(UnexpectedToken(unexpected).at(token.pos).into()),
+        RawToken::Target => Err(ExcessTargets.at(token.pos).into()),
+        _ => Err(unexpect(token, Expectation::EnvironmentAtom)),
     })
 }
 
 fn bundle_special_atom<E: From<Error>>(
     previous: &mut Vec<EnvironmentAtom>,
     bundler: impl Fn(Box<EnvironmentAtom>) -> EnvironmentAtom,
-    error: impl ErrorType + 'static,
+    raw: RawToken,
     pos: FilePosition,
 ) -> std::result::Result<EnvironmentAtom, E> {
     let Some(argument) = previous.pop() else {
-        return Err(error.at(pos).into());
+        return Err(InvalidSpecialAtom(raw).at(pos).into());
     };
 
     Ok(bundler(argument.into()))
@@ -564,12 +571,12 @@ fn parse_identifier_block(file: &mut impl Iterator<Item = Token>) -> ResultV<Vec
         if token.token == RawToken::Eol {
             empty_line = true;
         } else if !empty_line {
-            errors.push(ExpectedEOL.at(token.pos));
+            errors.push(unexpect(token, RawToken::Eol));
         } else if let RawToken::UnmarkedIdentifier(ident) = token.token {
             identifiers.push(ident);
             empty_line = false;
         } else {
-            errors.push(ExpectedIdentifier.at(token.pos));
+            errors.push(unexpect(token, Expectation::Identifier));
         }
     }
 
@@ -630,7 +637,7 @@ fn parse_attribute(config: &Config, token: Token, allow_neg_param: bool) -> Resu
             Attribute::Phoneme(parse_character(config, &character, &token.pos)?)
         }
         RawToken::SelectorCode(code) => Attribute::Selection(code),
-        unexpected => return Err(UnexpectedToken(unexpected).at(token.pos).into()),
+        _ => return Err(unexpect(token, Expectation::Attribute)),
     };
     Ok(res)
 }
@@ -643,7 +650,7 @@ fn parse_feature(
 ) -> Result<Attribute> {
     match config.features.encode(&feature) {
         Some(label) => Ok(Attribute::Feature(mark, label)),
-        None => Err(UndefinedFeature(feature).at(pos.clone())),
+        None => Err(Undefined(Defineable::Feature(feature)).at(pos.clone())),
     }
 }
 
@@ -661,8 +668,10 @@ fn parse_parameter(
 
     match config.parameters.encode(&parameter, &variant) {
         Some((p_label, Some(v_label))) => Ok(Attribute::Parameter(mark, p_label, v_label)),
-        Some((_, None)) => Err(UndefinedParameterVariant(parameter, variant).at(pos.clone())),
-        None => Err(UndefinedParameter(parameter).at(pos.clone())),
+        Some((_, None)) => {
+            Err(Undefined(Defineable::ParameterVariant(parameter, variant)).at(pos.clone()))
+        }
+        None => Err(Undefined(Defineable::Parameter(parameter)).at(pos.clone())),
     }
 }
 
@@ -686,7 +695,7 @@ fn parse_character<T: FromIterator<Attribute>>(
                 .diacritics
                 .decode(dia)
                 .cloned()
-                .ok_or_else(|| UndefinedDiacritic(dia).at(pos.clone()))
+                .ok_or_else(|| Undefined(Defineable::Diacritic(dia)).at(pos.clone()))
         })
         .partition_result();
     check_errors((), errors)?;
@@ -702,7 +711,7 @@ fn parse_base_character(
 ) -> Result<Attribute> {
     match config.characters.get(&character) {
         Some(phoneme) => Ok(Attribute::Character(phoneme.to_owned())),
-        None => Err(UndefinedCharacter(character).at(pos.clone())),
+        None => Err(Undefined(Defineable::Character(character)).at(pos.clone())),
     }
 }
 
@@ -712,18 +721,17 @@ fn parse_base_character(
 // If FileLexer gives an IO error, this function will consume and return it
 fn confirm_token_type(
     file: &mut impl Iterator<Item = Token>,
-    desired: &RawToken,
-    error: errors::ParseErrorType,
+    desired: RawToken,
     pos: &FilePosition,
 ) -> Result<()> {
     let Some(token) = file.next() else {
-        return Err(error.at(pos.clone()));
+        return Err(eol_error(pos.clone(), desired));
     };
 
-    if token.token == *desired {
+    if token.token == desired {
         Ok(())
     } else {
-        Err(error.at(token.pos))
+        Err(unexpect(token, desired))
     }
 }
 
@@ -732,7 +740,7 @@ fn confirm_token_type(
 fn end_line(file: &mut impl Iterator<Item = Token>) -> ResultV<()> {
     let errors: Vec<_> = file
         .take_while(|token| token.token != RawToken::Eol)
-        .map(|token| ExpectedEOL.at(token.pos))
+        .map(|tok| unexpect(tok, RawToken::Eol))
         .collect();
 
     check_errors((), errors)
