@@ -7,11 +7,11 @@ use arg_parser::{Cli, Command};
 use itertools::Itertools;
 
 use crate::cli::arg_parser::{ConfigArgs, EvolutionOutputArgs, EvolveArgs, TreeArgs};
+use crate::compiler::{parse_config_file, parse_word};
 use crate::config::{Config, Label};
 use crate::error_handling::{ErrorType, FilePosition, Result, ResultV, wrap_io_error};
 use crate::evolution::routing::find_route;
 use crate::evolution::{Rule, do_rule};
-use crate::parser::{parse_config_file, parse_word};
 use crate::phonemes::Phoneme;
 
 mod arg_parser;

@@ -2,7 +2,7 @@ use std::fmt::{Debug, Display};
 
 use crate::error_handling::{Error, ErrorType, FilePosition};
 
-use super::lexer::{RawToken, Token};
+use crate::lexer::{RawToken, Token};
 
 #[derive(Debug)]
 pub enum Defineable {
@@ -65,7 +65,7 @@ impl From<RawToken> for Expectation {
 }
 
 #[derive(Debug)]
-pub enum ParseErrorType {
+pub enum CompileErrorType {
     Unexpected(Option<RawToken>, Expectation),
     Undefined(Defineable),
     Redefinition(Defineable),
@@ -76,13 +76,13 @@ pub enum ParseErrorType {
     ExcessTargets,
 }
 
-impl ErrorType for ParseErrorType {
+impl ErrorType for CompileErrorType {
     fn module(&self) -> String {
-        String::from("parser")
+        String::from("compiler")
     }
 }
 
-impl Display for ParseErrorType {
+impl Display for CompileErrorType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Unexpected(found, expected) => match found {
@@ -108,9 +108,9 @@ impl Display for ParseErrorType {
 }
 
 pub fn unexpect<T: Into<Expectation>, O: From<Error>>(found: Token, expected: T) -> O {
-    O::from(ParseErrorType::Unexpected(Some(found.token), expected.into()).at(found.pos))
+    O::from(CompileErrorType::Unexpected(Some(found.token), expected.into()).at(found.pos))
 }
 
 pub fn eof_error<T: Into<Expectation>, O: From<Error>>(pos: FilePosition, expected: T) -> O {
-    O::from(ParseErrorType::Unexpected(None, expected.into()).at(pos))
+    O::from(CompileErrorType::Unexpected(None, expected.into()).at(pos))
 }

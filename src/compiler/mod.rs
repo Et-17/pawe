@@ -1,18 +1,17 @@
 mod errors;
-pub mod lexer;
 
 use itertools::Itertools;
 
+use crate::compiler::errors::{Defineable, Expectation, eof_error, unexpect};
 use crate::config::{Character, CharacterDefinition, Config, Label};
 use crate::error_handling::{
     Error, ErrorType, FilePosition, Result, ResultV, check_errors, wrap_io_error,
 };
 use crate::evolution::{Environment, EnvironmentAtom, InputAtom, Rule};
-use crate::parser::errors::{Defineable, Expectation, eof_error, unexpect};
+use crate::lexer::{Lexer, RawToken, Token};
 use crate::phonemes::{Attribute, Filter, Phoneme, Selector, SelectorCode, UnboundPhoneme};
 
-use errors::ParseErrorType::*;
-use lexer::{Lexer, RawToken, Token};
+use errors::CompileErrorType::*;
 
 pub fn parse_config_file(path: std::path::PathBuf) -> ResultV<Config> {
     let file = std::fs::File::open(&path).map_err(|e| {

@@ -4,9 +4,11 @@
 use std::process::ExitCode;
 
 mod cli;
+mod compiler;
 mod config;
 mod error_handling;
 mod evolution;
+mod lexer;
 mod parser;
 mod phonemes;
 
