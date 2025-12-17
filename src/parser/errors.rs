@@ -5,33 +5,6 @@ use crate::error_handling::{Error, ErrorType, FilePosition};
 use crate::lexer::{RawToken, Token};
 
 #[derive(Debug)]
-pub enum Defineable {
-    Language(String),
-    Feature(String),
-    Parameter(String),
-    ParameterVariant(String, String),
-    Character(String),
-    Diacritic(char),
-    Evolution(String, String),
-}
-
-impl Display for Defineable {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Language(lang) => write!(f, "language `{lang}`"),
-            Self::Feature(feat) => write!(f, "feature `{feat}`"),
-            Self::Parameter(param) => write!(f, "parameter `{param}`"),
-            Self::ParameterVariant(param, var) => {
-                write!(f, "variant `{var}` in parameter `{param}`")
-            }
-            Self::Character(character) => write!(f, "character `{character}`"),
-            Self::Diacritic(dia) => write!(f, "diacritic `◌{dia}`"),
-            Self::Evolution(start, end) => write!(f, "evolution from `{start}` to `{end}`"),
-        }
-    }
-}
-
-#[derive(Debug)]
 pub enum Expectation {
     Attribute,
     DefinitionKeyword,
@@ -65,10 +38,9 @@ impl From<RawToken> for Expectation {
 }
 
 #[derive(Debug)]
-pub enum CompileErrorType {
-    Unexpected(Option<RawToken>, Expectation),
-    Undefined(Defineable),
-    Redefinition(Defineable),
+pub enum ParseErrorType {
+    Unexpected(RawToken, Expectation),
+    Eof(Expectation),
 
     NegativeParameterInPhoneme,
     InvalidSpecialAtom(RawToken),
@@ -76,21 +48,17 @@ pub enum CompileErrorType {
     ExcessTargets,
 }
 
-impl ErrorType for CompileErrorType {
+impl ErrorType for ParseErrorType {
     fn module(&self) -> String {
-        String::from("compiler")
+        String::from("parser")
     }
 }
 
-impl Display for CompileErrorType {
+impl Display for ParseErrorType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Unexpected(found, expected) => match found {
-                Some(token) => write!(f, "expected {expected}, found {token}"),
-                None => write!(f, "expected {expected}"),
-            },
-            Self::Undefined(def) => write!(f, "could not find {def}"),
-            Self::Redefinition(def) => write!(f, "{def} is already defined"),
+            Self::Unexpected(found, expected) => write!(f, "expected {expected}, found {found}"),
+            Self::Eof(expected) => write!(f, "expected {expected}, found end-of-file"),
 
             Self::NegativeParameterInPhoneme => {
                 write!(f, "negative parameters can not be used in a phoneme")
@@ -108,9 +76,9 @@ impl Display for CompileErrorType {
 }
 
 pub fn unexpect<T: Into<Expectation>, O: From<Error>>(found: Token, expected: T) -> O {
-    O::from(CompileErrorType::Unexpected(Some(found.token), expected.into()).at(found.pos))
+    ParseErrorType::Unexpected(found.token, expected.into()).at(found.pos)
 }
 
-pub fn eof_error<T: Into<Expectation>, O: From<Error>>(pos: FilePosition, expected: T) -> O {
-    O::from(CompileErrorType::Unexpected(None, expected.into()).at(pos))
+pub fn eof<T: Into<Expectation>, O: From<Error>>(pos: FilePosition, expected: T) -> O {
+    ParseErrorType::Eof(expected.into()).at(pos)
 }

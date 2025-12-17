@@ -1,3 +1,5 @@
+mod errors;
+
 use crate::error_handling::FilePosition;
 use crate::phonemes::SelectorCode;
 
@@ -48,6 +50,9 @@ enum InputAtom {
 enum EnvironmentAtom {
     Phoneme(Phoneme),
     Filter(Filter),
+    Optional(Box<EnvironmentAtom>),
+    ZeroOrMore(Box<EnvironmentAtom>),
+    Not(Box<EnvironmentAtom>),
 }
 
 struct Environment {
@@ -70,4 +75,8 @@ enum DefinitionBlock {
     Characters(Vec<(Identifier, Phoneme)>),
     Diacritics(Vec<(Diacritic, Attribute)>),
     Evolve(Identifier, Identifier, Vec<Rule>),
+}
+
+struct Configuration {
+    definitions: Vec<DefinitionBlock>,
 }
