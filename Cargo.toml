@@ -1,6 +1,9 @@
 [package]
 name = "pawe"
 version = "0.2.0"
+description = "A tool for predicting word evolution and cognates"
+license = "Apache-2.0"
+repository = "https://github.com/Et-17/pawe"
 edition = "2024"
 
 [dependencies]
