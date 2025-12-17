@@ -58,7 +58,7 @@ Defining characters also helps improve the output of Pawe, because it can automa
 
 In addition to characters, you can define diacritics that can be suffixed to characters to modify them. You can use as many diacritics on a given character as you want, and inputs are automatically decomposed so the diacritics in precomposed characters will still be processed. Diacritics can be any single Unicode character after NFD normalization. While this does include combining diacritics, like `◌́`, it also includes non-combining characters, like `ː` or `ʰ`.
 
-Diacritics are defined in a `diacritics` block and must be preceeded by an arbitrary single Unicode character (after NFD normalization) to make combining diacritics easier to define. For example, if you wanted to use `◌́` to represent a stressed phoneme and `ː` to represent a long phoneme, you could write 
+Diacritics are defined in a `diacritics` block and may be preceeded by arbitrary characters to make management easier. The last Unicode character after NFD normalization will be taken as the diacritic being defined. For example, if you wanted to use `◌́` to represent a stressed phoneme and `ː` to represent a long phoneme, you could write 
 
     diacritics {
         ó +stressed;

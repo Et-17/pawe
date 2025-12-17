@@ -74,8 +74,6 @@ pub enum ParseErrorType {
     InvalidSpecialAtom(RawToken),
     MisplacedWordBoundary,
     ExcessTargets,
-    InvalidDiacriticDef,
-    DiacriticTooLong(String),
 }
 
 impl ErrorType for ParseErrorType {
@@ -105,14 +103,6 @@ impl Display for ParseErrorType {
                 "word boundaries may only be used at the start and end of the environment"
             ),
             Self::ExcessTargets => write!(f, "found multiple targets in environment"),
-            Self::InvalidDiacriticDef => {
-                write!(f, "a diacritic must be preceeded by an arbitrary character")
-            }
-            Self::DiacriticTooLong(diacritic) => write!(
-                f,
-                "diacritics must be one character long, `◌{diacritic}` has `{}`",
-                diacritic.chars().count()
-            ),
         }
     }
 }

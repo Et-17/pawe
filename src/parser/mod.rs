@@ -263,16 +263,7 @@ fn parse_diacritic_def(
         return Err(unexpect(dia_token, Expectation::Identifier));
     };
 
-    let Some((_, diacritic_str)) = def_str.split_at_checked(1) else {
-        return Err(InvalidDiacriticDef.at(dia_token.pos));
-    };
-
-    if diacritic_str.chars().count() > 1 {
-        return Err(DiacriticTooLong(diacritic_str.into()).at(dia_token.pos));
-    }
-    let Some(diacritic) = diacritic_str.chars().next() else {
-        return Err(InvalidDiacriticDef.at(dia_token.pos));
-    };
+    let diacritic = def_str.chars().last().expect("empty identifier");
 
     let Some(next_token) = file.next() else {
         return Err(eof_error(dia_token.pos, Expectation::Attribute));

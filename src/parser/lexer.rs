@@ -199,7 +199,7 @@ impl std::fmt::Display for RawToken {
             RawToken::PhonemeClose => write!(f, "]"),
             RawToken::MarkedFeature(mark, feat) => write!(f, "{}{feat}", display_mark(*mark)),
             RawToken::MarkedParameter(mark, param, variant) => {
-                write!(f, "{}{param}{variant}", display_mark(*mark))
+                write!(f, "{}{param}.{variant}", display_mark(*mark))
             }
             RawToken::SelectorCode(code) => write!(f, "{code}"),
             RawToken::UnmarkedIdentifier(ident) => write!(f, "{ident}"),
