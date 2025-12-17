@@ -1,6 +1,6 @@
 [package]
 name = "pawe"
-version = "0.2.0"
+version = "0.2.1"
 description = "A tool for predicting word evolution and cognates"
 license = "Apache-2.0"
 repository = "https://github.com/Et-17/pawe"
