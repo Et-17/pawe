@@ -2,7 +2,7 @@ use std::fmt::{Debug, Display};
 use std::path::Path;
 use std::rc::Rc;
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug, Default)]
 struct InternalFilePosition {
     line: usize,
     char: Option<usize>,
@@ -17,7 +17,7 @@ impl Display for InternalFilePosition {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, Default)]
 pub struct FilePosition {
     path: Option<Rc<Path>>,
     internal: Option<InternalFilePosition>,

@@ -213,6 +213,7 @@ fn mark_token(token: RawToken, pos: FilePosition) -> Token {
     Token { token, pos }
 }
 
+#[derive(PartialEq)]
 pub struct Token {
     pub token: RawToken,
     pub pos: FilePosition,
