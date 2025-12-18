@@ -43,7 +43,6 @@ enum AttributeKind {
     Feature(bool, String),
     Parameter(bool, String, String),
     Character(String),
-    SelectorCode(SelectorCode),
 }
 
 #[derive(Debug, PartialEq)]
@@ -65,11 +64,48 @@ impl Parse<ParseError> for Attribute {
                 AttributeKind::Parameter(mark, param, variant)
             }
             RawToken::UnmarkedIdentifier(character) => AttributeKind::Character(character),
-            RawToken::SelectorCode(code) => AttributeKind::SelectorCode(code),
             _ => return Err(unexpect(token, Expectation::Attribute)),
         };
 
-        Ok(Attribute {
+        Ok(Self {
+            kind,
+            pos: token.pos,
+        })
+    }
+}
+
+#[derive(Debug, PartialEq)]
+enum OutputAttributeKind {
+    Feature(bool, String),
+    Parameter(bool, String, String),
+    Character(String),
+    SelectorCode(SelectorCode),
+}
+
+#[derive(Debug, PartialEq)]
+struct OutputAttribute {
+    kind: OutputAttributeKind,
+    pos: FilePosition,
+}
+
+impl Parse<ParseError> for OutputAttribute {
+    fn try_parse(
+        lexer: &mut impl Iterator<Item = Token>,
+        pos: &FilePosition,
+    ) -> Result<Self, ParseError> {
+        let token = read_token(lexer, Expectation::Attribute, pos)?;
+
+        let kind = match token.token {
+            RawToken::MarkedFeature(mark, feat) => OutputAttributeKind::Feature(mark, feat),
+            RawToken::MarkedParameter(mark, param, variant) => {
+                OutputAttributeKind::Parameter(mark, param, variant)
+            }
+            RawToken::UnmarkedIdentifier(character) => OutputAttributeKind::Character(character),
+            RawToken::SelectorCode(code) => OutputAttributeKind::SelectorCode(code),
+            _ => return Err(unexpect(token, Expectation::Attribute)),
+        };
+
+        Ok(Self {
             kind,
             pos: token.pos,
         })
@@ -77,7 +113,7 @@ impl Parse<ParseError> for Attribute {
 }
 
 struct Phoneme {
-    attributes: Vec<Attribute>,
+    attributes: Vec<Result<Attribute, ParseError>>,
     pos: FilePosition,
 }
 
@@ -90,6 +126,10 @@ struct Selector {
     attributes: Vec<Attribute>,
     code: SelectorCode,
     pos: FilePosition,
+}
+
+struct OutputPhoneme {
+    attributes: Vec<Result<Attribute, ParseError>>,
 }
 
 enum InputAtom {
@@ -141,7 +181,7 @@ impl Parse<ParseError> for Diacritic {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct DiacriticDefinition {
     diacritic: Diacritic,
     definition: Result<Attribute, ParseError>,
@@ -291,13 +331,12 @@ mod tests {
 
     #[test]
     fn attributes() {
-        let input = "+alpha -bravo.charlie delta 5";
+        let input = "+alpha -bravo.charlie delta";
         let input_tokens: Vec<_> = str_positions(input).collect();
         let expected_kinds = vec![
             AttributeKind::Feature(true, "alpha".to_string()),
             AttributeKind::Parameter(false, "bravo".to_string(), "charlie".to_string()),
             AttributeKind::Character("delta".to_string()),
-            AttributeKind::SelectorCode(5),
         ];
         let expected = expected_kinds
             .into_iter()
@@ -305,21 +344,56 @@ mod tests {
             .map(|(kind, pos)| Attribute { kind, pos })
             .collect_vec();
 
-        let blank_pos = FilePosition::default();
         let actual = lex_str(input)
-            .batching(|it| Attribute::try_parse(it, &blank_pos).ok())
+            .batching(|it| Attribute::try_parse(it, &FilePosition::default()).ok())
             .collect_vec();
 
-        assert_eq!(expected, actual);
+        assert_eq!(actual, expected);
     }
 
     #[test]
     fn invalid_attribute() {
         let input = "languages";
+        let expected_token = lex_str(input).next().unwrap();
+        let expected: ParseError = unexpect(expected_token, Expectation::Attribute);
 
         let actual = Attribute::try_parse(&mut lex_str(input), &FilePosition::default());
 
-        assert!(actual.is_err());
+        assert_eq!(actual.unwrap_err(), expected);
+    }
+
+    #[test]
+    fn output_attributes() {
+        let input = "+alpha -bravo.charlie delta 5";
+        let input_tokens: Vec<_> = str_positions(input).collect();
+        let expected_kinds = vec![
+            OutputAttributeKind::Feature(true, "alpha".to_string()),
+            OutputAttributeKind::Parameter(false, "bravo".to_string(), "charlie".to_string()),
+            OutputAttributeKind::Character("delta".to_string()),
+            OutputAttributeKind::SelectorCode(5),
+        ];
+        let expected = expected_kinds
+            .into_iter()
+            .zip(input_tokens)
+            .map(|(kind, pos)| OutputAttribute { kind, pos })
+            .collect_vec();
+
+        let actual = lex_str(input)
+            .batching(|it| OutputAttribute::try_parse(it, &FilePosition::default()).ok())
+            .collect_vec();
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn invalid_output_attribute() {
+        let input = "languages";
+        let expected_token = lex_str(input).next().unwrap();
+        let expected: ParseError = unexpect(expected_token, Expectation::Attribute);
+
+        let actual = OutputAttribute::try_parse(&mut lex_str(input), &FilePosition::default());
+
+        assert_eq!(actual.unwrap_err(), expected);
     }
 
     #[test]
@@ -337,21 +411,20 @@ mod tests {
         let input = "aé +alpha bravo charlie;";
         let char = '\u{0301}';
         let (dia_pos, attr_pos) = str_positions(input).next_tuple().unwrap();
+        let mut tail = lex_str(input).skip(2).take(2);
         let expected = DiacriticDefinition {
             diacritic: Diacritic { char, pos: dia_pos },
             definition: Ok(Attribute {
                 kind: AttributeKind::Feature(true, "alpha".to_string()),
                 pos: attr_pos,
             }),
-            excess_tokens: Vec::new(),
+            excess_tokens: super::end_line(&mut tail).collect_vec(),
         };
 
         let actual =
             DiacriticDefinition::try_parse(&mut lex_str(input), &FilePosition::default()).unwrap();
 
-        assert_eq!(actual.diacritic, expected.diacritic);
-        assert_eq!(actual.definition.unwrap(), expected.definition.unwrap());
-        assert_eq!(actual.excess_tokens.len(), 2);
+        assert_eq!(actual, expected);
     }
 
     #[test]
