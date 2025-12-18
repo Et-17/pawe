@@ -4,7 +4,7 @@ use crate::error_handling::{Error, ErrorType, FilePosition};
 
 use crate::lexer::{RawToken, Token};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Expectation {
     Attribute,
     DefinitionKeyword,
@@ -37,7 +37,7 @@ impl From<RawToken> for Expectation {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ParseErrorType {
     Unexpected(RawToken, Expectation),
     Eof(Expectation),
@@ -47,6 +47,8 @@ pub enum ParseErrorType {
     MisplacedWordBoundary,
     ExcessTargets,
 }
+
+pub type ParseError = Error<ParseErrorType>;
 
 impl ErrorType for ParseErrorType {
     fn module(&self) -> String {
@@ -75,10 +77,10 @@ impl Display for ParseErrorType {
     }
 }
 
-pub fn unexpect<T: Into<Expectation>, O: From<Error>>(found: Token, expected: T) -> O {
+pub fn unexpect<T: Into<Expectation>, O: From<ParseError>>(found: Token, expected: T) -> O {
     ParseErrorType::Unexpected(found.token, expected.into()).at(found.pos)
 }
 
-pub fn eof<T: Into<Expectation>, O: From<Error>>(pos: FilePosition, expected: T) -> O {
+pub fn eof<T: Into<Expectation>, O: From<ParseError>>(pos: FilePosition, expected: T) -> O {
     ParseErrorType::Eof(expected.into()).at(pos)
 }

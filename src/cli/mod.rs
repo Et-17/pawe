@@ -22,7 +22,7 @@ const EXPECTED_PRIMARY_CONFIG_NAME: &str = "primary.paw";
 pub static mut NO_BASE: bool = false;
 pub static mut RAW_INPUT: bool = false;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum CliErrorType {
     NoConfigFile(PathBuf),
     UndefinedLanguage(String),

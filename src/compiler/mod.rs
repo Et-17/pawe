@@ -522,12 +522,12 @@ fn parse_environment_atom(
     })
 }
 
-fn bundle_special_atom<E: From<Error>>(
+fn bundle_special_atom(
     previous: &mut Vec<EnvironmentAtom>,
     bundler: impl Fn(Box<EnvironmentAtom>) -> EnvironmentAtom,
     raw: RawToken,
     pos: FilePosition,
-) -> std::result::Result<EnvironmentAtom, E> {
+) -> ResultV<EnvironmentAtom> {
     let Some(argument) = previous.pop() else {
         return Err(InvalidSpecialAtom(raw).at(pos));
     };

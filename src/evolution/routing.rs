@@ -3,7 +3,7 @@ use std::collections::{HashMap, VecDeque};
 use crate::config::{Label, LabelEncoding};
 use crate::evolution::Rule;
 
-use crate::error_handling::{ErrorType, Result};
+use crate::error_handling::{Error, ErrorType, Result};
 
 pub type Route = Vec<Label>;
 type Languages = LabelEncoding;
@@ -42,10 +42,10 @@ pub fn find_route(
 ) -> Result<Route> {
     let start = languages
         .encode(&start_name)
-        .ok_or_else(|| UndefinedLanguage(start_name).sign())?;
+        .ok_or_else(|| UndefinedLanguage(start_name).sign::<Error<RoutingErrorType>>())?;
     let end = languages
         .encode(&end_name)
-        .ok_or_else(|| UndefinedLanguage(end_name).sign())?;
+        .ok_or_else(|| UndefinedLanguage(end_name).sign::<Error<RoutingErrorType>>())?;
 
     search(&start, &end, evolutions)
 }

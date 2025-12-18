@@ -1,11 +1,12 @@
 mod errors;
 
-use crate::error_handling::{Error, FilePosition};
+use crate::error_handling::{Error, ErrorType, FilePosition};
 use crate::lexer::{RawToken, Token};
+use crate::parser::errors::ParseError;
 use crate::phonemes::SelectorCode;
-use errors::{Expectation, ParseErrorType, eof, unexpect};
+use errors::{Expectation, eof, unexpect};
 
-use ParseErrorType::*;
+use errors::ParseErrorType::*;
 
 trait Parse<E>: Sized {
     fn try_parse(lexer: &mut impl Iterator<Item = Token>, pos: &FilePosition) -> Result<Self, E>;
@@ -17,11 +18,11 @@ struct Identifier {
     pos: FilePosition,
 }
 
-impl Parse<Error> for Identifier {
+impl Parse<ParseError> for Identifier {
     fn try_parse(
         lexer: &mut impl Iterator<Item = Token>,
         pos: &FilePosition,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, ParseError> {
         let token = read_token(lexer, Expectation::Identifier, pos)?;
 
         let RawToken::UnmarkedIdentifier(text) = token.token else {
@@ -51,11 +52,11 @@ struct Attribute {
     pos: FilePosition,
 }
 
-impl Parse<Error> for Attribute {
+impl Parse<ParseError> for Attribute {
     fn try_parse(
         lexer: &mut impl Iterator<Item = Token>,
         pos: &FilePosition,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, ParseError> {
         let token = read_token(lexer, Expectation::Attribute, pos)?;
 
         let kind = match token.token {
@@ -124,11 +125,11 @@ struct Diacritic {
     pos: FilePosition,
 }
 
-impl Parse<Error> for Diacritic {
+impl Parse<ParseError> for Diacritic {
     fn try_parse(
         lexer: &mut impl Iterator<Item = Token>,
         pos: &FilePosition,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, ParseError> {
         let identifier = Identifier::try_parse(lexer, pos)?;
 
         let char = identifier.text.chars().last().expect("empty identifier");
@@ -143,15 +144,15 @@ impl Parse<Error> for Diacritic {
 #[derive(Debug)]
 struct DiacriticDefinition {
     diacritic: Diacritic,
-    definition: Result<Attribute, Error>,
-    excess_tokens: Vec<Error>,
+    definition: Result<Attribute, ParseError>,
+    excess_tokens: Vec<ParseError>,
 }
 
-impl Parse<Vec<Error>> for DiacriticDefinition {
+impl Parse<Vec<ParseError>> for DiacriticDefinition {
     fn try_parse(
         lexer: &mut impl Iterator<Item = Token>,
         pos: &FilePosition,
-    ) -> Result<Self, Vec<Error>> {
+    ) -> Result<Self, Vec<ParseError>> {
         let diacritic = match Diacritic::try_parse(lexer, pos) {
             Ok(dia) => dia,
             Err(e) => {
@@ -186,7 +187,7 @@ struct Configuration {
     definitions: Vec<DefinitionBlock>,
 }
 
-fn end_line(lexer: &mut impl Iterator<Item = Token>) -> impl Iterator<Item = Error> {
+fn end_line(lexer: &mut impl Iterator<Item = Token>) -> impl Iterator<Item = ParseError> {
     lexer
         .take_while(|token| token.token != RawToken::Eol)
         .map(|token| unexpect(token, RawToken::Eol))
@@ -196,7 +197,7 @@ fn read_token<T, E: Into<Expectation>>(
     lexer: &mut impl Iterator<Item = T>,
     expectation: E,
     pos: &FilePosition,
-) -> Result<T, Error> {
+) -> Result<T, ParseError> {
     lexer.next().ok_or_else(|| eof(pos.clone(), expectation))
 }
 

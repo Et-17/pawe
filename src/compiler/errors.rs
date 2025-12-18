@@ -107,10 +107,16 @@ impl Display for CompileErrorType {
     }
 }
 
-pub fn unexpect<T: Into<Expectation>, O: From<Error>>(found: Token, expected: T) -> O {
-    O::from(CompileErrorType::Unexpected(Some(found.token), expected.into()).at(found.pos))
+pub fn unexpect<T: Into<Expectation>, O: From<Error<CompileErrorType>>>(
+    found: Token,
+    expected: T,
+) -> O {
+    CompileErrorType::Unexpected(Some(found.token), expected.into()).at(found.pos)
 }
 
-pub fn eof_error<T: Into<Expectation>, O: From<Error>>(pos: FilePosition, expected: T) -> O {
-    O::from(CompileErrorType::Unexpected(None, expected.into()).at(pos))
+pub fn eof_error<T: Into<Expectation>, O: From<Error<CompileErrorType>>>(
+    pos: FilePosition,
+    expected: T,
+) -> O {
+    CompileErrorType::Unexpected(None, expected.into()).at(pos)
 }

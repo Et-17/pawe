@@ -50,22 +50,22 @@ impl FilePosition {
 pub trait ErrorType: Display + Debug {
     fn module(&self) -> String;
 
-    fn at<T: From<Error>>(self, pos: FilePosition) -> T
+    fn at<T: From<Error<Self>>>(self, pos: FilePosition) -> T
     where
         Self: Sized + 'static,
     {
-        T::from(Error {
+        T::from(Error::<Self> {
             pos: Some(pos),
             module: self.module(),
             internal: Box::new(self),
         })
     }
 
-    fn sign<T: From<Error>>(self) -> T
+    fn sign<T: From<Error<Self>>>(self) -> T
     where
         Self: Sized + 'static,
     {
-        T::from(Error {
+        T::from(Error::<Self> {
             pos: None,
             module: self.module(),
             internal: Box::new(self),
@@ -74,10 +74,10 @@ pub trait ErrorType: Display + Debug {
 }
 
 #[derive(Debug)]
-pub struct Error {
+pub struct Error<T: ErrorType + ?Sized = dyn ErrorType> {
     pos: Option<FilePosition>,
     module: String,
-    internal: Box<dyn ErrorType>,
+    internal: Box<T>,
 }
 
 impl Display for Error {
@@ -90,11 +90,38 @@ impl Display for Error {
     }
 }
 
-// This lets us use ? when we want to fully fail on single errors in a function
-// that returns a vector of errors, especially in parsing
-impl From<Error> for Vec<Error> {
-    fn from(value: Error) -> Self {
+impl<T: ErrorType + ?Sized + PartialEq> PartialEq for Error<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.pos == other.pos && self.module == other.module && self.internal == other.internal
+    }
+}
+
+// You can pass a concrete type to something that expects a dyn anywhere, but
+// the compiler won't recognize we're trying to do that if it's a member of a
+// struct. Instead, we have to reconstruct the struct to convert it.
+impl<T: ErrorType + 'static> From<Error<T>> for Error<dyn ErrorType> {
+    fn from(value: Error<T>) -> Self {
+        Self {
+            pos: value.pos,
+            module: value.module,
+            internal: value.internal,
+        }
+    }
+}
+
+// These let us use ? when we want to fully fail on single errors in a function
+// that returns a vector of errors, especially in parsing.
+// We define this separately so that we can don't need 'static and Sized if we
+// aren't converting to dyn.
+impl<T: ErrorType + ?Sized> From<Error<T>> for Vec<Error<T>> {
+    fn from(value: Error<T>) -> Self {
         vec![value]
+    }
+}
+
+impl<T: ErrorType + 'static> From<Error<T>> for Vec<Error<dyn ErrorType>> {
+    fn from(value: Error<T>) -> Self {
+        vec![Into::<Error<dyn ErrorType>>::into(value)]
     }
 }
 
@@ -137,5 +164,5 @@ pub fn wrap_io_error(
     }
 }
 
-pub type Result<T> = std::result::Result<T, Error>;
-pub type ResultV<T> = std::result::Result<T, Vec<Error>>;
+pub type Result<T, E = dyn ErrorType> = std::result::Result<T, Error<E>>;
+pub type ResultV<T, E = dyn ErrorType> = std::result::Result<T, Vec<Error<E>>>;
