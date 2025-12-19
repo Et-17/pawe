@@ -200,6 +200,36 @@ fn phoneme() {
 }
 
 #[test]
+fn filter() {
+    let input = "+alpha +bravo.charlie -delta.echo foxtrot 5 #)";
+    let attrs_input = &input[..input.len() - 1];
+    let expected = Ok(Filter {
+        attributes: FilterAttribute::parse_iter(&mut lex_str(attrs_input)),
+        pos: FilePosition::default(),
+    });
+
+    let actual = Filter::try_parse(&mut lex_str(input), &FilePosition::default());
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn selector() {
+    let input = "+alpha +bravo.charlie -delta.echo foxtrot 5 #)";
+    let code = 12;
+    let attrs_input = &input[..input.len() - 1];
+    let expected = Ok(Selector {
+        attributes: FilterAttribute::parse_iter(&mut lex_str(attrs_input)),
+        code,
+        pos: FilePosition::default(),
+    });
+
+    let actual = Selector::try_parse(&mut lex_str(input), &FilePosition::default(), code);
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
 fn diacritic() {
     let input = "aé";
     let char = '\u{0301}';

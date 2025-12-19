@@ -170,15 +170,49 @@ impl Parse<ParseError> for Phoneme {
     }
 }
 
+#[derive(Debug, PartialEq)]
 struct Filter {
-    attributes: Vec<FilterAttribute>,
+    attributes: Vec<Result<FilterAttribute, ParseError>>,
     pos: FilePosition,
 }
 
+impl Parse<ParseError> for Filter {
+    fn try_parse(
+        lexer: &mut impl Iterator<Item = Token>,
+        pos: &FilePosition,
+    ) -> Result<Self, ParseError> {
+        let mut tokens = read_until_closed(lexer, RawToken::FilterSelectorClose, pos)?;
+
+        Ok(Filter {
+            attributes: Attribute::parse_iter(&mut tokens),
+            pos: pos.clone(),
+        })
+    }
+}
+
+#[derive(Debug, PartialEq)]
 struct Selector {
-    attributes: Vec<FilterAttribute>,
+    attributes: Vec<Result<FilterAttribute, ParseError>>,
     code: SelectorCode,
     pos: FilePosition,
+}
+
+// Selector needs to know its code, despite not being able to see its opening
+// tokens, so it can't implement Parse
+impl Selector {
+    fn try_parse(
+        lexer: &mut impl Iterator<Item = Token>,
+        pos: &FilePosition,
+        code: SelectorCode,
+    ) -> Result<Self, ParseError> {
+        let filter = Filter::try_parse(lexer, pos)?;
+
+        Ok(Self {
+            attributes: filter.attributes,
+            code,
+            pos: pos.clone(),
+        })
+    }
 }
 
 struct OutputPhoneme {
