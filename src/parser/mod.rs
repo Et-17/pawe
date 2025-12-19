@@ -2,16 +2,28 @@ mod errors;
 #[cfg(test)]
 mod tests;
 
-use crate::error_handling::{Error, ErrorType, FilePosition};
+use crate::error_handling::{ErrorType, FilePosition};
 use crate::lexer::{RawToken, Token};
 use crate::parser::errors::ParseError;
 use crate::phonemes::SelectorCode;
 use errors::{Expectation, eof, unexpect};
 
 use errors::ParseErrorType::*;
+use itertools::Itertools;
 
 trait Parse<E>: Sized {
     fn try_parse(lexer: &mut impl Iterator<Item = Token>, pos: &FilePosition) -> Result<Self, E>;
+
+    fn parse_iter(lexer: &mut impl Iterator<Item = Token>) -> Vec<Result<Self, E>> {
+        let mut peekable = lexer.peekable();
+        let mut results = Vec::new();
+
+        while peekable.peek().is_some() {
+            results.push(Self::try_parse(&mut peekable, &FilePosition::default()));
+        }
+
+        results
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -41,97 +53,136 @@ impl Parse<ParseError> for Identifier {
 }
 
 #[derive(Debug, PartialEq)]
-enum AttributeKind {
+enum FilterAttributeKind {
     Feature(bool, String),
     Parameter(bool, String, String),
     Character(String),
 }
 
-#[derive(Debug, PartialEq)]
-struct Attribute {
-    kind: AttributeKind,
-    pos: FilePosition,
+impl TryFrom<Token> for FilterAttributeKind {
+    type Error = ParseError;
+
+    fn try_from(value: Token) -> Result<Self, Self::Error> {
+        match value.token {
+            RawToken::MarkedFeature(mark, feat) => Ok(Self::Feature(mark, feat)),
+            RawToken::MarkedParameter(mark, param, variant) => {
+                Ok(Self::Parameter(mark, param, variant))
+            }
+            RawToken::UnmarkedIdentifier(character) => Ok(Self::Character(character)),
+            RawToken::SelectorCode(_) => Err(InvalidSelectorCode.at(value.pos)),
+            _ => Err(unexpect(value, Expectation::Attribute)),
+        }
+    }
 }
 
-impl Parse<ParseError> for Attribute {
-    fn try_parse(
-        lexer: &mut impl Iterator<Item = Token>,
-        pos: &FilePosition,
-    ) -> Result<Self, ParseError> {
-        let token = read_token(lexer, Expectation::Attribute, pos)?;
+#[derive(Debug, PartialEq)]
+enum PhonemeAttributeKind {
+    Feature(bool, String),
+    Parameter(String, String),
+    Character(String),
+}
 
-        let kind = match token.token {
-            RawToken::MarkedFeature(mark, feat) => AttributeKind::Feature(mark, feat),
-            RawToken::MarkedParameter(mark, param, variant) => {
-                AttributeKind::Parameter(mark, param, variant)
-            }
-            RawToken::UnmarkedIdentifier(character) => AttributeKind::Character(character),
-            _ => return Err(unexpect(token, Expectation::Attribute)),
-        };
+impl TryFrom<Token> for PhonemeAttributeKind {
+    type Error = ParseError;
 
-        Ok(Self {
-            kind,
-            pos: token.pos,
-        })
+    fn try_from(value: Token) -> Result<Self, Self::Error> {
+        match value.token {
+            RawToken::MarkedFeature(mark, feat) => Ok(Self::Feature(mark, feat)),
+            RawToken::MarkedParameter(true, param, variant) => Ok(Self::Parameter(param, variant)),
+            RawToken::MarkedParameter(false, _, _) => Err(InvalidNegativeParameter.at(value.pos)),
+            RawToken::UnmarkedIdentifier(character) => Ok(Self::Character(character)),
+            RawToken::SelectorCode(_) => Err(InvalidSelectorCode.at(value.pos)),
+            _ => Err(unexpect(value, Expectation::Attribute)),
+        }
     }
 }
 
 #[derive(Debug, PartialEq)]
 enum OutputAttributeKind {
     Feature(bool, String),
-    Parameter(bool, String, String),
+    Parameter(String, String),
     Character(String),
     SelectorCode(SelectorCode),
 }
 
+impl TryFrom<Token> for OutputAttributeKind {
+    type Error = ParseError;
+
+    fn try_from(value: Token) -> Result<Self, Self::Error> {
+        match value.token {
+            RawToken::MarkedFeature(mark, feat) => Ok(Self::Feature(mark, feat)),
+            RawToken::MarkedParameter(true, param, variant) => Ok(Self::Parameter(param, variant)),
+            RawToken::MarkedParameter(false, _, _) => Err(InvalidNegativeParameter.at(value.pos)),
+            RawToken::UnmarkedIdentifier(character) => Ok(Self::Character(character)),
+            RawToken::SelectorCode(code) => Ok(Self::SelectorCode(code)),
+            _ => Err(unexpect(value, Expectation::Attribute)),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
-struct OutputAttribute {
-    kind: OutputAttributeKind,
+struct Attribute<T: TryFrom<Token, Error = ParseError>> {
+    kind: T,
     pos: FilePosition,
 }
 
-impl Parse<ParseError> for OutputAttribute {
+impl<T: TryFrom<Token, Error = ParseError>> Parse<ParseError> for Attribute<T> {
     fn try_parse(
         lexer: &mut impl Iterator<Item = Token>,
         pos: &FilePosition,
     ) -> Result<Self, ParseError> {
         let token = read_token(lexer, Expectation::Attribute, pos)?;
+        let attr_pos = token.pos.clone();
 
-        let kind = match token.token {
-            RawToken::MarkedFeature(mark, feat) => OutputAttributeKind::Feature(mark, feat),
-            RawToken::MarkedParameter(mark, param, variant) => {
-                OutputAttributeKind::Parameter(mark, param, variant)
-            }
-            RawToken::UnmarkedIdentifier(character) => OutputAttributeKind::Character(character),
-            RawToken::SelectorCode(code) => OutputAttributeKind::SelectorCode(code),
-            _ => return Err(unexpect(token, Expectation::Attribute)),
-        };
+        let kind = token.try_into()?;
 
         Ok(Self {
             kind,
-            pos: token.pos,
+            pos: attr_pos,
         })
     }
 }
 
+type FilterAttribute = Attribute<FilterAttributeKind>;
+type PhonemeAttribute = Attribute<PhonemeAttributeKind>;
+type OutputAttribute = Attribute<OutputAttributeKind>;
+
+#[derive(Debug, PartialEq)]
 struct Phoneme {
-    attributes: Vec<Result<Attribute, ParseError>>,
+    attributes: Vec<Result<PhonemeAttribute, ParseError>>,
     pos: FilePosition,
 }
 
+impl Parse<ParseError> for Phoneme {
+    // This assumes that the opening character has already been consumed, so
+    // that the caller can decide to parse a phoneme. It will take the passed
+    // pos as the pos for the returned Phoneme.
+    fn try_parse(
+        lexer: &mut impl Iterator<Item = Token>,
+        pos: &FilePosition,
+    ) -> Result<Self, ParseError> {
+        let mut tokens = read_until_closed(lexer, RawToken::PhonemeClose, pos)?;
+
+        Ok(Phoneme {
+            attributes: Attribute::parse_iter(&mut tokens),
+            pos: pos.clone(),
+        })
+    }
+}
+
 struct Filter {
-    attributes: Vec<Attribute>,
+    attributes: Vec<FilterAttribute>,
     pos: FilePosition,
 }
 
 struct Selector {
-    attributes: Vec<Attribute>,
+    attributes: Vec<FilterAttribute>,
     code: SelectorCode,
     pos: FilePosition,
 }
 
 struct OutputPhoneme {
-    attributes: Vec<Result<Attribute, ParseError>>,
+    attributes: Vec<Result<OutputAttribute, ParseError>>,
 }
 
 enum InputAtom {
@@ -186,7 +237,7 @@ impl Parse<ParseError> for Diacritic {
 #[derive(Debug, PartialEq)]
 struct DiacriticDefinition {
     diacritic: Diacritic,
-    definition: Result<Attribute, ParseError>,
+    definition: Result<PhonemeAttribute, ParseError>,
     excess_tokens: Vec<ParseError>,
 }
 
@@ -221,7 +272,7 @@ enum DefinitionBlock {
     Parameters(Vec<(Identifier, Vec<Identifier>)>),
     Features(Vec<Identifier>),
     Characters(Vec<(Identifier, Phoneme)>),
-    Diacritics(Vec<(Diacritic, Attribute)>),
+    Diacritics(Vec<DiacriticDefinition>),
     Evolve(Identifier, Identifier, Vec<Rule>),
 }
 
@@ -230,9 +281,7 @@ struct Configuration {
 }
 
 fn end_line(lexer: &mut impl Iterator<Item = Token>) -> impl Iterator<Item = ParseError> {
-    lexer
-        .take_while(|token| token.token != RawToken::Eol)
-        .map(|token| unexpect(token, RawToken::Eol))
+    read_until(lexer, &RawToken::Eol).map(|token| unexpect(token, RawToken::Eol))
 }
 
 fn read_token<T, E: Into<Expectation>>(
@@ -241,4 +290,30 @@ fn read_token<T, E: Into<Expectation>>(
     pos: &FilePosition,
 ) -> Result<T, ParseError> {
     lexer.next().ok_or_else(|| eof(pos.clone(), expectation))
+}
+
+fn read_until(
+    lexer: &mut impl Iterator<Item = Token>,
+    token: &RawToken,
+) -> impl Iterator<Item = Token> {
+    lexer.take_while(|next| next.token != *token)
+}
+
+// This eagerly consumes all tokens until the end token or eof, and then
+// verifies that it's present before converting the tokens back into an iter
+// and returning it.
+fn read_until_closed(
+    lexer: &mut impl Iterator<Item = Token>,
+    end: RawToken,
+    pos: &FilePosition,
+) -> Result<impl Iterator<Item = Token>, ParseError> {
+    let mut peeking = lexer.peekable();
+    let tokens = peeking
+        .peeking_take_while(|next| next.token != end)
+        .collect_vec();
+    let last_pos = tokens.last().map_or(pos, |token| &token.pos);
+
+    read_token(&mut peeking, end, last_pos)?;
+
+    Ok(tokens.into_iter())
 }

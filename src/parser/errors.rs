@@ -42,7 +42,8 @@ pub enum ParseErrorType {
     Unexpected(RawToken, Expectation),
     Eof(Expectation),
 
-    NegativeParameterInPhoneme,
+    InvalidNegativeParameter,
+    InvalidSelectorCode,
     InvalidSpecialAtom(RawToken),
     MisplacedWordBoundary,
     ExcessTargets,
@@ -62,8 +63,12 @@ impl Display for ParseErrorType {
             Self::Unexpected(found, expected) => write!(f, "expected {expected}, found {found}"),
             Self::Eof(expected) => write!(f, "expected {expected}, found end-of-file"),
 
-            Self::NegativeParameterInPhoneme => {
-                write!(f, "negative parameters can not be used in a phoneme")
+            Self::InvalidNegativeParameter => write!(
+                f,
+                "negative parameters can only be used in filters and selectors"
+            ),
+            Self::InvalidSelectorCode => {
+                write!(f, "selector codes can only be referenced in outputs")
             }
             Self::InvalidSpecialAtom(atom) => {
                 write!(f, "{atom} must be preceeded by an environment atom")

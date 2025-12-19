@@ -1,6 +1,7 @@
 use itertools::Itertools;
 use std::fmt::Debug;
 
+use super::errors::ParseErrorType;
 use super::*;
 use crate::lexer::Lexer;
 
@@ -56,6 +57,22 @@ fn eof() {
 }
 
 #[test]
+fn read_until_closed() {
+    let input = "alpha bravo } charlie delta";
+    let expected = lex_str(input).take(2).collect_vec();
+    let expected_tail = lex_str(input).skip(3).collect_vec();
+
+    let lexer = &mut lex_str(input);
+    let actual = super::read_until_closed(lexer, RawToken::BlockClose, &FilePosition::default())
+        .unwrap()
+        .collect_vec();
+    let actual_tail = lexer.collect_vec();
+
+    assert_eq!(actual, expected);
+    assert_eq!(actual_tail, expected_tail);
+}
+
+#[test]
 fn identifier() {
     let input = "alpha";
     let expected_pos = str_positions(input).next().unwrap();
@@ -90,69 +107,94 @@ fn empty_identifier() {
     let _ = Identifier::try_parse(&mut input, &FilePosition::default());
 }
 
-#[test]
-fn attributes() {
-    let input = "+alpha -bravo.charlie delta";
-    let input_tokens: Vec<_> = str_positions(input).collect();
-    let expected_kinds = vec![
-        AttributeKind::Feature(true, "alpha".to_string()),
-        AttributeKind::Parameter(false, "bravo".to_string(), "charlie".to_string()),
-        AttributeKind::Character("delta".to_string()),
-    ];
-    let expected = expected_kinds
+fn test_attribute_kind<T: TryFrom<Token, Error = ParseError> + Debug + PartialEq>(
+    input: &'static str,
+    expected: Vec<Result<T, ParseErrorType>>,
+) {
+    let expected_results = expected
         .into_iter()
-        .zip(input_tokens)
-        .map(|(kind, pos)| Attribute { kind, pos })
+        .zip_eq(str_positions(input))
+        .map(|(res, pos)| match res {
+            Ok(kind) => Ok(Attribute::<T> { kind, pos }),
+            Err(e) => Err(e.at::<ParseError>(pos)),
+        })
         .collect_vec();
 
-    let actual = lex_str(input)
-        .batching(|it| Attribute::try_parse(it, &FilePosition::default()).ok())
-        .collect_vec();
+    let actual = Attribute::<T>::parse_iter(&mut lex_str(input));
 
-    assert_eq!(actual, expected);
+    assert_eq!(actual, expected_results);
 }
 
 #[test]
-fn invalid_attribute() {
-    let input = "languages";
-    let expected_token = lex_str(input).next().unwrap();
-    let expected = Err(unexpect(expected_token, Expectation::Attribute));
-
-    let actual = Attribute::try_parse(&mut lex_str(input), &FilePosition::default());
-
-    assert_eq!(actual, expected);
-}
-
-#[test]
-fn output_attributes() {
-    let input = "+alpha -bravo.charlie delta 5";
-    let input_tokens: Vec<_> = str_positions(input).collect();
-    let expected_kinds = vec![
-        OutputAttributeKind::Feature(true, "alpha".to_string()),
-        OutputAttributeKind::Parameter(false, "bravo".to_string(), "charlie".to_string()),
-        OutputAttributeKind::Character("delta".to_string()),
-        OutputAttributeKind::SelectorCode(5),
+fn filter_attribute() {
+    let input = "+alpha +bravo.charlie -delta.echo foxtrot 5 #";
+    let expected = vec![
+        Ok(FilterAttributeKind::Feature(true, "alpha".to_string())),
+        Ok(FilterAttributeKind::Parameter(
+            true,
+            "bravo".to_string(),
+            "charlie".to_string(),
+        )),
+        Ok(FilterAttributeKind::Parameter(
+            false,
+            "delta".to_string(),
+            "echo".to_string(),
+        )),
+        Ok(FilterAttributeKind::Character("foxtrot".to_string())),
+        Err(InvalidSelectorCode),
+        Err(Unexpected(RawToken::WordBoundry, Expectation::Attribute)),
     ];
-    let expected = expected_kinds
-        .into_iter()
-        .zip(input_tokens)
-        .map(|(kind, pos)| OutputAttribute { kind, pos })
-        .collect_vec();
 
-    let actual = lex_str(input)
-        .batching(|it| OutputAttribute::try_parse(it, &FilePosition::default()).ok())
-        .collect_vec();
-
-    assert_eq!(actual, expected);
+    test_attribute_kind(input, expected);
 }
 
 #[test]
-fn invalid_output_attribute() {
-    let input = "languages";
-    let expected_token = lex_str(input).next().unwrap();
-    let expected = Err(unexpect(expected_token, Expectation::Attribute));
+fn phoneme_attribute() {
+    let input = "+alpha +bravo.charlie -delta.echo foxtrot 5 #";
+    let expected = vec![
+        Ok(PhonemeAttributeKind::Feature(true, "alpha".to_string())),
+        Ok(PhonemeAttributeKind::Parameter(
+            "bravo".to_string(),
+            "charlie".to_string(),
+        )),
+        Err(InvalidNegativeParameter),
+        Ok(PhonemeAttributeKind::Character("foxtrot".to_string())),
+        Err(InvalidSelectorCode),
+        Err(Unexpected(RawToken::WordBoundry, Expectation::Attribute)),
+    ];
 
-    let actual = OutputAttribute::try_parse(&mut lex_str(input), &FilePosition::default());
+    test_attribute_kind(input, expected);
+}
+
+#[test]
+fn output_attribute() {
+    let input = "+alpha +bravo.charlie -delta.echo foxtrot 5 #";
+    let expected = vec![
+        Ok(OutputAttributeKind::Feature(true, "alpha".to_string())),
+        Ok(OutputAttributeKind::Parameter(
+            "bravo".to_string(),
+            "charlie".to_string(),
+        )),
+        Err(InvalidNegativeParameter),
+        Ok(OutputAttributeKind::Character("foxtrot".to_string())),
+        Ok(OutputAttributeKind::SelectorCode(5)),
+        Err(Unexpected(RawToken::WordBoundry, Expectation::Attribute)),
+    ];
+
+    test_attribute_kind(input, expected);
+}
+
+#[test]
+fn phoneme() {
+    let input = "+alpha +bravo.charlie -delta.echo foxtrot 5 #]";
+    let attrs_input = &input[..input.len() - 1];
+    // let expected_attrs = PhonemeAttribute::parse_iter(&mut lex_str(attrs_input));
+    let expected = Ok(Phoneme {
+        attributes: PhonemeAttribute::parse_iter(&mut lex_str(attrs_input)),
+        pos: FilePosition::default(),
+    });
+
+    let actual = Phoneme::try_parse(&mut lex_str(input), &FilePosition::default());
 
     assert_eq!(actual, expected);
 }
@@ -176,7 +218,7 @@ fn diacritic_definition() {
     let expected = Ok(DiacriticDefinition {
         diacritic: Diacritic { char, pos: dia_pos },
         definition: Ok(Attribute {
-            kind: AttributeKind::Feature(true, "alpha".to_string()),
+            kind: PhonemeAttributeKind::Feature(true, "alpha".to_string()),
             pos: attr_pos,
         }),
         excess_tokens: super::end_line(&mut tail).collect_vec(),
