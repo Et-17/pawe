@@ -9,7 +9,7 @@ use crate::phonemes::SelectorCode;
 use errors::{Expectation, eof, unexpect};
 
 use errors::ParseErrorType::*;
-use itertools::Itertools;
+use itertools::{Itertools, PeekingNext};
 
 trait Parse<E>: Sized {
     fn try_parse(lexer: &mut impl Iterator<Item = Token>, pos: &FilePosition) -> Result<Self, E>;
@@ -308,11 +308,80 @@ impl Parse<ParseError> for EnvironmentAtom {
     }
 }
 
+fn get_env_atom_pos(atom: &EnvironmentAtom) -> Option<&FilePosition> {
+    let ok_pos = match &atom {
+        EnvironmentAtom::Phoneme(inner) => inner.as_ref().map(|i| Some(&i.pos)),
+        EnvironmentAtom::Filter(inner) => inner.as_ref().map(|i| Some(&i.pos)),
+        EnvironmentAtom::Identifier(inner) => inner.as_ref().map(|i| Some(&i.pos)),
+        EnvironmentAtom::Optional(inner) => inner.as_ref().as_ref().map(|i| get_env_atom_pos(i)),
+        EnvironmentAtom::ZeroOrMore(inner) => inner.as_ref().as_ref().map(|i| get_env_atom_pos(i)),
+        EnvironmentAtom::Not(inner) => inner.as_ref().as_ref().map(|i| get_env_atom_pos(i)),
+    };
+
+    ok_pos.unwrap_or_else(|e| e.pos.as_ref())
+}
+
+fn get_env_side_last_pos<'a>(
+    side: &'a [Result<EnvironmentAtom, ParseError>],
+    fallback: &'a FilePosition,
+) -> &'a FilePosition {
+    side.last()
+        .and_then(|last| {
+            last.as_ref()
+                .map_or_else(|e| e.pos.as_ref(), get_env_atom_pos)
+        })
+        .unwrap_or(fallback)
+}
+
+#[derive(Debug, PartialEq)]
 struct Environment {
     start: bool,
     end: bool,
-    pre: Vec<EnvironmentAtom>,
-    post: Vec<EnvironmentAtom>,
+    pre: Vec<Result<EnvironmentAtom, ParseError>>,
+    post: Vec<Result<EnvironmentAtom, ParseError>>,
+}
+
+impl Parse<ParseError> for Environment {
+    fn try_parse(
+        lexer: &mut impl Iterator<Item = Token>,
+        pos: &FilePosition,
+    ) -> Result<Self, ParseError> {
+        let mut peeking = lexer.peekable();
+
+        let start = peeking
+            .peeking_next(|token| token.token == RawToken::WordBoundry)
+            .is_some();
+
+        let mut pre_lexer = peeking.peeking_take_while(|token| token.token != RawToken::Target);
+        let pre = EnvironmentAtom::parse_iter(&mut pre_lexer);
+        let last_pos = get_env_side_last_pos(&pre, pos);
+        confirm_token(&mut peeking, RawToken::Target, last_pos)?;
+
+        let mut end = false;
+        // We don't want to pass the actual end word boundary to the environment
+        // atom's parse_iter, but we also don't want to stop on an internal,
+        // misplaced word boundary. This passes tokens, and if it finds a word
+        // boundary, it'll check if it's the last token. If it isn't, it'll pass
+        // it on to the parse_iter for error logging, but if it is, it'll stop
+        // iterator and set end to true.
+        let mut post_lexer = peeking.batching(|it| {
+            let token = it.next()?;
+            if token.token == RawToken::WordBoundry && it.peek().is_none() {
+                end = true;
+                None
+            } else {
+                Some(token)
+            }
+        });
+        let post = EnvironmentAtom::parse_iter(&mut post_lexer);
+
+        Ok(Self {
+            start,
+            end,
+            pre,
+            post,
+        })
+    }
 }
 
 struct Rule {

@@ -439,3 +439,96 @@ fn invalid_environment_atom() {
 
     assert_eq!(actual, expected);
 }
+
+#[test]
+fn get_env_atom_pos() {
+    let input = "[+alpha] (-bravo.charlie) ?*!delta";
+
+    let tokens = &mut lex_str(input).collect_vec();
+    let alpha = &tokens[0].pos;
+    let bravo = &tokens[3].pos;
+    let delta = &tokens[9].pos;
+
+    let actual = EnvironmentAtom::parse_iter(&mut lex_str(input));
+
+    assert_eq!(
+        super::get_env_atom_pos(actual[0].as_ref().unwrap()),
+        Some(alpha)
+    );
+    assert_eq!(
+        super::get_env_atom_pos(actual[1].as_ref().unwrap()),
+        Some(bravo)
+    );
+    assert_eq!(
+        super::get_env_atom_pos(actual[2].as_ref().unwrap()),
+        Some(delta)
+    );
+}
+
+#[test]
+fn environment_no_boundaries() {
+    let input = "alpha bravo _ charlie delta";
+
+    let e_lexer = &mut lex_str(input);
+    let pre_tokens: [Token; 2] = e_lexer.next_array().unwrap();
+    e_lexer.next().unwrap();
+    let post_tokens: [Token; 2] = e_lexer.collect_array().unwrap();
+    let pre = EnvironmentAtom::parse_iter(&mut pre_tokens.into_iter());
+    let post = EnvironmentAtom::parse_iter(&mut post_tokens.into_iter());
+    let expected = Ok(Environment {
+        start: false,
+        end: false,
+        pre,
+        post,
+    });
+
+    let actual = Environment::try_parse(&mut lex_str(input), &FilePosition::default());
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn environment_both_boundaries() {
+    let input = "# alpha bravo _ charlie delta #";
+
+    let e_lexer = &mut lex_str(input);
+    e_lexer.next().unwrap();
+    let pre_tokens: [Token; 2] = e_lexer.next_array().unwrap();
+    e_lexer.next().unwrap();
+    let post_tokens: [Token; 2] = e_lexer.next_array().unwrap();
+    assert_eq!(e_lexer.count(), 1);
+    let pre = EnvironmentAtom::parse_iter(&mut pre_tokens.into_iter());
+    let post = EnvironmentAtom::parse_iter(&mut post_tokens.into_iter());
+    let expected = Ok(Environment {
+        start: true,
+        end: true,
+        pre,
+        post,
+    });
+
+    let actual = Environment::try_parse(&mut lex_str(input), &FilePosition::default());
+
+    let expected = dbg!(expected);
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn misplaced_boundary_in_post_env() {
+    let input = "alpha bravo _ charlie # delta #";
+
+    let e_lexer = &mut lex_str(input);
+    let pre = EnvironmentAtom::parse_iter(&mut e_lexer.take(2));
+    e_lexer.next().unwrap();
+    let post = EnvironmentAtom::parse_iter(&mut e_lexer.take(3));
+    assert_eq!(e_lexer.count(), 1);
+    let expected = Ok(Environment {
+        start: false,
+        end: true,
+        pre,
+        post,
+    });
+
+    let actual = Environment::try_parse(&mut lex_str(input), &FilePosition::default());
+
+    assert_eq!(actual, expected);
+}

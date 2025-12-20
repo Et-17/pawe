@@ -75,7 +75,7 @@ pub trait ErrorType: Display + Debug {
 
 #[derive(Debug)]
 pub struct Error<T: ErrorType + ?Sized = dyn ErrorType> {
-    pos: Option<FilePosition>,
+    pub pos: Option<FilePosition>,
     module: String,
     internal: Box<T>,
 }
