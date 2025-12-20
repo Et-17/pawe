@@ -44,7 +44,6 @@ pub enum ParseErrorType {
 
     InvalidNegativeParameter,
     InvalidSelectorCode,
-    InvalidSpecialAtom(RawToken),
     MisplacedWordBoundary,
     ExcessTargets,
 }
@@ -69,9 +68,6 @@ impl Display for ParseErrorType {
             ),
             Self::InvalidSelectorCode => {
                 write!(f, "selector codes can only be referenced in outputs")
-            }
-            Self::InvalidSpecialAtom(atom) => {
-                write!(f, "{atom} must be preceeded by an environment atom")
             }
             Self::MisplacedWordBoundary => write!(
                 f,

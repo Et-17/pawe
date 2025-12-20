@@ -210,27 +210,102 @@ impl Selector {
         Ok(Self {
             attributes: filter.attributes,
             code,
+            pos: filter.pos,
+        })
+    }
+}
+
+#[derive(Debug, PartialEq)]
+struct OutputPhoneme {
+    attributes: Vec<Result<OutputAttribute, ParseError>>,
+    pos: FilePosition,
+}
+
+impl Parse<ParseError> for OutputPhoneme {
+    // Unlike normal phonemes, this expects to have its opening token
+    fn try_parse(
+        lexer: &mut impl Iterator<Item = Token>,
+        pos: &FilePosition,
+    ) -> Result<Self, ParseError> {
+        confirm_token(lexer, RawToken::PhonemeOpen, pos)?;
+
+        let mut tokens = read_until_closed(lexer, RawToken::PhonemeClose, pos)?;
+
+        Ok(OutputPhoneme {
+            attributes: Attribute::parse_iter(&mut tokens),
             pos: pos.clone(),
         })
     }
 }
 
-struct OutputPhoneme {
-    attributes: Vec<Result<OutputAttribute, ParseError>>,
-}
-
+#[derive(Debug, PartialEq)]
 enum InputAtom {
-    Phoneme(Phoneme),
-    Filter(Filter),
-    Selector(Selector),
+    Phoneme(Result<Phoneme, ParseError>),
+    Filter(Result<Filter, ParseError>),
+    Selector(Result<Selector, ParseError>),
+    Identifier(Result<Identifier, ParseError>),
 }
 
+impl Parse<ParseError> for InputAtom {
+    fn try_parse(
+        lexer: &mut impl Iterator<Item = Token>,
+        pos: &FilePosition,
+    ) -> Result<Self, ParseError> {
+        let open_token = read_token(lexer, Expectation::InputAtom, pos)?;
+
+        let atom = match open_token.token {
+            RawToken::PhonemeOpen => Self::Phoneme(Phoneme::try_parse(lexer, &open_token.pos)),
+            RawToken::FilterOpen => Self::Filter(Filter::try_parse(lexer, &open_token.pos)),
+            RawToken::SelectorOpen(code) => {
+                Self::Selector(Selector::try_parse(lexer, &open_token.pos, code))
+            }
+            RawToken::UnmarkedIdentifier(text) => Self::Identifier(Ok(Identifier {
+                text,
+                pos: open_token.pos,
+            })),
+            _ => return Err(unexpect(open_token, Expectation::InputAtom)),
+        };
+
+        Ok(atom)
+    }
+}
+
+#[derive(Debug, PartialEq)]
 enum EnvironmentAtom {
-    Phoneme(Phoneme),
-    Filter(Filter),
-    Optional(Box<EnvironmentAtom>),
-    ZeroOrMore(Box<EnvironmentAtom>),
-    Not(Box<EnvironmentAtom>),
+    Phoneme(Result<Phoneme, ParseError>),
+    Filter(Result<Filter, ParseError>),
+    Identifier(Result<Identifier, ParseError>),
+    Optional(Box<Result<EnvironmentAtom, ParseError>>),
+    ZeroOrMore(Box<Result<EnvironmentAtom, ParseError>>),
+    Not(Box<Result<EnvironmentAtom, ParseError>>),
+}
+
+impl Parse<ParseError> for EnvironmentAtom {
+    fn try_parse(
+        lexer: &mut impl Iterator<Item = Token>,
+        pos: &FilePosition,
+    ) -> Result<Self, ParseError> {
+        let open_token = read_token(lexer, Expectation::EnvironmentAtom, pos)?;
+
+        let atom = match open_token.token {
+            RawToken::PhonemeOpen => Self::Phoneme(Phoneme::try_parse(lexer, &open_token.pos)),
+            RawToken::FilterOpen => Self::Filter(Filter::try_parse(lexer, &open_token.pos)),
+            RawToken::UnmarkedIdentifier(text) => Self::Identifier(Ok(Identifier {
+                text,
+                pos: open_token.pos,
+            })),
+            RawToken::Optional => Self::Optional(Box::new(Self::try_parse(lexer, &open_token.pos))),
+            RawToken::ZeroOrMore => {
+                Self::ZeroOrMore(Box::new(Self::try_parse(lexer, &open_token.pos)))
+            }
+            RawToken::Not => Self::Not(Box::new(Self::try_parse(lexer, &open_token.pos))),
+            RawToken::Target => return Err(ExcessTargets.at(open_token.pos)),
+            RawToken::WordBoundry => return Err(MisplacedWordBoundary.at(open_token.pos)),
+            _ => return Err(unexpect(open_token, Expectation::EnvironmentAtom)),
+        };
+
+        Ok(atom)
+    }
 }
 
 struct Environment {
@@ -350,4 +425,21 @@ fn read_until_closed(
     read_token(&mut peeking, end, last_pos)?;
 
     Ok(tokens.into_iter())
+}
+
+fn confirm_token(
+    lexer: &mut impl Iterator<Item = Token>,
+    token: RawToken,
+    pos: &FilePosition,
+) -> Result<(), ParseError> {
+    match lexer.next() {
+        Some(found_token) => {
+            if found_token.token == token {
+                Ok(())
+            } else {
+                Err(unexpect(found_token, token))
+            }
+        }
+        None => Err(eof(pos.clone(), token)),
+    }
 }

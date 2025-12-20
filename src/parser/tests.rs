@@ -73,6 +73,34 @@ fn read_until_closed() {
 }
 
 #[test]
+fn confirm_token_failure() {
+    let input = "#";
+    let token = lex_str(input).next().unwrap();
+    let expected = Err(unexpect(token, RawToken::PhonemeOpen));
+
+    let actual = confirm_token(
+        &mut lex_str(input),
+        RawToken::PhonemeOpen,
+        &FilePosition::default(),
+    );
+
+    assert_eq!(actual, expected);
+
+    let expected_eof = Err(super::errors::eof(
+        FilePosition::default(),
+        RawToken::PhonemeOpen,
+    ));
+
+    let actual_eof = confirm_token(
+        &mut lex_str(""),
+        RawToken::PhonemeOpen,
+        &FilePosition::default(),
+    );
+
+    assert_eq!(actual_eof, expected_eof);
+}
+
+#[test]
 fn identifier() {
     let input = "alpha";
     let expected_pos = str_positions(input).next().unwrap();
@@ -188,13 +216,26 @@ fn output_attribute() {
 fn phoneme() {
     let input = "+alpha +bravo.charlie -delta.echo foxtrot 5 #]";
     let attrs_input = &input[..input.len() - 1];
-    // let expected_attrs = PhonemeAttribute::parse_iter(&mut lex_str(attrs_input));
     let expected = Ok(Phoneme {
         attributes: PhonemeAttribute::parse_iter(&mut lex_str(attrs_input)),
         pos: FilePosition::default(),
     });
 
     let actual = Phoneme::try_parse(&mut lex_str(input), &FilePosition::default());
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn output_phoneme() {
+    let input = "[+alpha +bravo.charlie -delta.echo foxtrot 5 #]";
+    let attrs_input = &input[..input.len() - 1];
+    let expected = Ok(OutputPhoneme {
+        attributes: OutputAttribute::parse_iter(&mut lex_str(attrs_input).skip(1)),
+        pos: FilePosition::default(),
+    });
+
+    let actual = OutputPhoneme::try_parse(&mut lex_str(input), &FilePosition::default());
 
     assert_eq!(actual, expected);
 }
@@ -270,6 +311,131 @@ fn invalid_diacritic_definition() {
     ]);
 
     let actual = DiacriticDefinition::try_parse(&mut lex_str(input), &FilePosition::default());
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn input_atom() {
+    let input = "[+alpha] (-bravo.charlie) 1(+delta.echo) foxtrot";
+
+    let dfp = &FilePosition::default();
+    let e_lexer = &mut lex_str(input);
+    let phoneme_open = e_lexer.next().unwrap();
+    let phoneme = Phoneme::try_parse(e_lexer, &phoneme_open.pos);
+    let filter_open = e_lexer.next().unwrap();
+    let filter = Filter::try_parse(e_lexer, &filter_open.pos);
+    let selector_open = e_lexer.next().unwrap();
+    let selector = Selector::try_parse(e_lexer, &selector_open.pos, 1);
+    let identifier = Identifier::try_parse(e_lexer, dfp);
+    let expected = vec![
+        Ok(InputAtom::Phoneme(phoneme)),
+        Ok(InputAtom::Filter(filter)),
+        Ok(InputAtom::Selector(selector)),
+        Ok(InputAtom::Identifier(identifier)),
+    ];
+
+    let actual = InputAtom::parse_iter(&mut lex_str(input));
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn invalid_input_atom() {
+    let input = "#";
+
+    let e_token = lex_str(input).next().unwrap();
+    let expected = Err(unexpect(e_token, Expectation::InputAtom));
+
+    let actual = InputAtom::try_parse(&mut lex_str(input), &FilePosition::default());
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn environment_atom() {
+    let input = "[+alpha] (-bravo) ?charlie *delta !echo";
+
+    let e_lexer = &mut lex_str(input);
+    let phoneme_open = e_lexer.next().unwrap();
+    let phoneme = Phoneme::try_parse(e_lexer, &phoneme_open.pos);
+    let filter_open = e_lexer.next().unwrap();
+    let filter = Filter::try_parse(e_lexer, &filter_open.pos);
+    e_lexer.next().unwrap();
+    let charlie = Identifier::try_parse(e_lexer, &FilePosition::default());
+    e_lexer.next().unwrap();
+    let delta = Identifier::try_parse(e_lexer, &FilePosition::default());
+    e_lexer.next().unwrap();
+    let echo = Identifier::try_parse(e_lexer, &FilePosition::default());
+    let expected = vec![
+        Ok(EnvironmentAtom::Phoneme(phoneme)),
+        Ok(EnvironmentAtom::Filter(filter)),
+        Ok(EnvironmentAtom::Optional(Box::new(Ok(
+            EnvironmentAtom::Identifier(charlie),
+        )))),
+        Ok(EnvironmentAtom::ZeroOrMore(Box::new(Ok(
+            EnvironmentAtom::Identifier(delta),
+        )))),
+        Ok(EnvironmentAtom::Not(Box::new(Ok(
+            EnvironmentAtom::Identifier(echo),
+        )))),
+    ];
+
+    let actual = EnvironmentAtom::parse_iter(&mut lex_str(input));
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn environment_atom_nesting() {
+    let input = "?*!alpha bravo";
+
+    let pos = str_positions(input).nth(3).unwrap();
+    let character = EnvironmentAtom::Identifier(Ok(Identifier {
+        text: "alpha".to_string(),
+        pos,
+    }));
+    let not = EnvironmentAtom::Not(Box::new(Ok(character)));
+    let zeroormore = EnvironmentAtom::ZeroOrMore(Box::new(Ok(not)));
+    let optional = EnvironmentAtom::Optional(Box::new(Ok(zeroormore)));
+    let expected = Ok(optional);
+    let expected_tail = lex_str(input).last();
+
+    let lexer = &mut lex_str(input);
+    let actual = EnvironmentAtom::try_parse(lexer, &FilePosition::default());
+    let actual_tail = lexer.next();
+
+    assert_eq!(actual, expected);
+    assert_eq!(actual_tail, expected_tail);
+}
+
+#[test]
+fn invalid_env_atom_nesting() {
+    let input = "?*";
+
+    let pos = str_positions(input).last().unwrap();
+    let error = super::errors::eof(pos, Expectation::EnvironmentAtom);
+    let zeroormore = EnvironmentAtom::ZeroOrMore(Box::new(Err(error)));
+    let optional = EnvironmentAtom::Optional(Box::new(Ok(zeroormore)));
+    let expected = Ok(optional);
+
+    let actual = EnvironmentAtom::try_parse(&mut lex_str(input), &FilePosition::default());
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn invalid_environment_atom() {
+    let input = "_ # languages";
+
+    let (target, boundary, lang) = lex_str(input).collect_tuple().unwrap();
+    let expected = vec![
+        Err(ExcessTargets.at(target.pos)),
+        Err(MisplacedWordBoundary.at(boundary.pos)),
+        Err(unexpect(lang, Expectation::EnvironmentAtom)),
+    ];
+
+    let actual = EnvironmentAtom::parse_iter(&mut lex_str(input));
 
     assert_eq!(actual, expected);
 }
