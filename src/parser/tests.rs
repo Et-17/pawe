@@ -148,7 +148,7 @@ fn test_attribute_kind<T: TryFrom<Token, Error = ParseError> + Debug + PartialEq
         })
         .collect_vec();
 
-    let actual = Attribute::<T>::parse_iter(&mut lex_str(input));
+    let actual = Attribute::<T>::parse_iter(&mut lex_str(input), &FilePosition::default());
 
     assert_eq!(actual, expected_results);
 }
@@ -217,7 +217,10 @@ fn phoneme() {
     let input = "+alpha +bravo.charlie -delta.echo foxtrot 5 #]";
     let attrs_input = &input[..input.len() - 1];
     let expected = Ok(Phoneme {
-        attributes: PhonemeAttribute::parse_iter(&mut lex_str(attrs_input)),
+        attributes: PhonemeAttribute::parse_iter(
+            &mut lex_str(attrs_input),
+            &FilePosition::default(),
+        ),
         pos: FilePosition::default(),
     });
 
@@ -231,7 +234,10 @@ fn output_phoneme() {
     let input = "[+alpha +bravo.charlie -delta.echo foxtrot 5 #]";
     let attrs_input = &input[..input.len() - 1];
     let expected = Ok(OutputPhoneme {
-        attributes: OutputAttribute::parse_iter(&mut lex_str(attrs_input).skip(1)),
+        attributes: OutputAttribute::parse_iter(
+            &mut lex_str(attrs_input).skip(1),
+            &FilePosition::default(),
+        ),
         pos: FilePosition::default(),
     });
 
@@ -245,7 +251,10 @@ fn filter() {
     let input = "+alpha +bravo.charlie -delta.echo foxtrot 5 #)";
     let attrs_input = &input[..input.len() - 1];
     let expected = Ok(Filter {
-        attributes: FilterAttribute::parse_iter(&mut lex_str(attrs_input)),
+        attributes: FilterAttribute::parse_iter(
+            &mut lex_str(attrs_input),
+            &FilePosition::default(),
+        ),
         pos: FilePosition::default(),
     });
 
@@ -260,7 +269,10 @@ fn selector() {
     let code = 12;
     let attrs_input = &input[..input.len() - 1];
     let expected = Ok(Selector {
-        attributes: FilterAttribute::parse_iter(&mut lex_str(attrs_input)),
+        attributes: FilterAttribute::parse_iter(
+            &mut lex_str(attrs_input),
+            &FilePosition::default(),
+        ),
         code,
         pos: FilePosition::default(),
     });
@@ -335,7 +347,7 @@ fn input_atom() {
         Ok(InputAtom::Identifier(identifier)),
     ];
 
-    let actual = InputAtom::parse_iter(&mut lex_str(input));
+    let actual = InputAtom::parse_iter(&mut lex_str(input), &FilePosition::default());
 
     assert_eq!(actual, expected);
 }
@@ -381,7 +393,7 @@ fn environment_atom() {
         )))),
     ];
 
-    let actual = EnvironmentAtom::parse_iter(&mut lex_str(input));
+    let actual = EnvironmentAtom::parse_iter(&mut lex_str(input), &FilePosition::default());
 
     assert_eq!(actual, expected);
 }
@@ -435,46 +447,22 @@ fn invalid_environment_atom() {
         Err(unexpect(lang, Expectation::EnvironmentAtom)),
     ];
 
-    let actual = EnvironmentAtom::parse_iter(&mut lex_str(input));
+    let actual = EnvironmentAtom::parse_iter(&mut lex_str(input), &FilePosition::default());
 
     assert_eq!(actual, expected);
 }
 
 #[test]
-fn get_env_atom_pos() {
-    let input = "[+alpha] (-bravo.charlie) ?*!delta";
-
-    let tokens = &mut lex_str(input).collect_vec();
-    let alpha = &tokens[0].pos;
-    let bravo = &tokens[3].pos;
-    let delta = &tokens[9].pos;
-
-    let actual = EnvironmentAtom::parse_iter(&mut lex_str(input));
-
-    assert_eq!(
-        super::get_env_atom_pos(actual[0].as_ref().unwrap()),
-        Some(alpha)
-    );
-    assert_eq!(
-        super::get_env_atom_pos(actual[1].as_ref().unwrap()),
-        Some(bravo)
-    );
-    assert_eq!(
-        super::get_env_atom_pos(actual[2].as_ref().unwrap()),
-        Some(delta)
-    );
-}
-
-#[test]
 fn environment_no_boundaries() {
-    let input = "alpha bravo _ charlie delta";
+    let input = "/ alpha bravo _ charlie delta";
 
     let e_lexer = &mut lex_str(input);
+    e_lexer.next().unwrap();
     let pre_tokens: [Token; 2] = e_lexer.next_array().unwrap();
     e_lexer.next().unwrap();
     let post_tokens: [Token; 2] = e_lexer.collect_array().unwrap();
-    let pre = EnvironmentAtom::parse_iter(&mut pre_tokens.into_iter());
-    let post = EnvironmentAtom::parse_iter(&mut post_tokens.into_iter());
+    let pre = EnvironmentAtom::parse_iter(&mut pre_tokens.into_iter(), &FilePosition::default());
+    let post = EnvironmentAtom::parse_iter(&mut post_tokens.into_iter(), &FilePosition::default());
     let expected = Ok(Environment {
         start: false,
         end: false,
@@ -489,16 +477,16 @@ fn environment_no_boundaries() {
 
 #[test]
 fn environment_both_boundaries() {
-    let input = "# alpha bravo _ charlie delta #";
+    let input = "/ # alpha bravo _ charlie delta #";
 
     let e_lexer = &mut lex_str(input);
-    e_lexer.next().unwrap();
+    e_lexer.take(2).count();
     let pre_tokens: [Token; 2] = e_lexer.next_array().unwrap();
     e_lexer.next().unwrap();
     let post_tokens: [Token; 2] = e_lexer.next_array().unwrap();
     assert_eq!(e_lexer.count(), 1);
-    let pre = EnvironmentAtom::parse_iter(&mut pre_tokens.into_iter());
-    let post = EnvironmentAtom::parse_iter(&mut post_tokens.into_iter());
+    let pre = EnvironmentAtom::parse_iter(&mut pre_tokens.into_iter(), &FilePosition::default());
+    let post = EnvironmentAtom::parse_iter(&mut post_tokens.into_iter(), &FilePosition::default());
     let expected = Ok(Environment {
         start: true,
         end: true,
@@ -514,12 +502,13 @@ fn environment_both_boundaries() {
 
 #[test]
 fn misplaced_boundary_in_post_env() {
-    let input = "alpha bravo _ charlie # delta #";
+    let input = "/ alpha bravo _ charlie # delta #";
 
     let e_lexer = &mut lex_str(input);
-    let pre = EnvironmentAtom::parse_iter(&mut e_lexer.take(2));
     e_lexer.next().unwrap();
-    let post = EnvironmentAtom::parse_iter(&mut e_lexer.take(3));
+    let pre = EnvironmentAtom::parse_iter(&mut e_lexer.take(2), &FilePosition::default());
+    e_lexer.next().unwrap();
+    let post = EnvironmentAtom::parse_iter(&mut e_lexer.take(3), &FilePosition::default());
     assert_eq!(e_lexer.count(), 1);
     let expected = Ok(Environment {
         start: false,
@@ -529,6 +518,85 @@ fn misplaced_boundary_in_post_env() {
     });
 
     let actual = Environment::try_parse(&mut lex_str(input), &FilePosition::default());
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn environment_empty() {
+    let input = "";
+
+    let expected = Ok(Environment {
+        start: false,
+        end: false,
+        pre: Vec::new(),
+        post: Vec::new(),
+    });
+
+    let actual = Environment::try_parse(&mut lex_str(input), &FilePosition::default());
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn rule_with_environment() {
+    let input_str = "alpha bravo > charlie delta / echo _ golf; hotel";
+
+    let e_lexer = &mut lex_str(input_str);
+    let input = InputAtom::parse_iter(&mut e_lexer.take(2), &FilePosition::default());
+    e_lexer.next().unwrap();
+    let output = OutputPhoneme::parse_iter(&mut e_lexer.take(2), &FilePosition::default());
+    let env = Environment::try_parse(&mut e_lexer.take(4), &FilePosition::default());
+    let expected = Ok(Rule { input, output, env });
+    e_lexer.next().unwrap();
+    let expected_tail = e_lexer.collect_vec();
+
+    let a_lexer = &mut lex_str(input_str);
+    let actual = Rule::try_parse(a_lexer, &FilePosition::default());
+    let actual_tail = a_lexer.collect_vec();
+
+    assert_eq!(actual, expected);
+    assert_eq!(actual_tail, expected_tail);
+}
+
+#[test]
+fn rule_without_environment() {
+    let input_str = "alpha bravo > charlie delta; hotel";
+
+    let e_lexer = &mut lex_str(input_str);
+    let input = InputAtom::parse_iter(&mut e_lexer.take(2), &FilePosition::default());
+    e_lexer.next().unwrap();
+    let output = OutputPhoneme::parse_iter(&mut e_lexer.take(2), &FilePosition::default());
+    let env = Ok(Environment {
+        start: false,
+        end: false,
+        pre: Vec::new(),
+        post: Vec::new(),
+    });
+    let expected = Ok(Rule { input, output, env });
+    e_lexer.next().unwrap();
+    let expected_tail = e_lexer.collect_vec();
+
+    let a_lexer = &mut lex_str(input_str);
+    let actual = Rule::try_parse(a_lexer, &FilePosition::default());
+    let actual_tail = a_lexer.collect_vec();
+
+    assert_eq!(actual, expected);
+    assert_eq!(actual_tail, expected_tail);
+}
+
+#[test]
+fn rule_without_output() {
+    let input_str = "alpha bravo / charlie _ delta";
+
+    let e_lexer = &mut lex_str(input_str);
+    let (input, last_pos) =
+        InputAtom::tracked_parse_iter(&mut e_lexer.take(2), &FilePosition::default());
+    let output = vec![Err(super::eof(last_pos, RawToken::Output))];
+    let env = Environment::try_parse(e_lexer, &FilePosition::default());
+    let expected = Ok(Rule { input, output, env });
+
+    let actual = Rule::try_parse(&mut lex_str(input_str), &FilePosition::default());
 
     assert_eq!(actual, expected);
 }

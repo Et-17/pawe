@@ -9,20 +9,32 @@ use crate::phonemes::SelectorCode;
 use errors::{Expectation, eof, unexpect};
 
 use errors::ParseErrorType::*;
-use itertools::{Itertools, PeekingNext};
+use itertools::{Itertools, PeekingNext, PeekingTakeWhile};
 
 trait Parse<E>: Sized {
     fn try_parse(lexer: &mut impl Iterator<Item = Token>, pos: &FilePosition) -> Result<Self, E>;
 
-    fn parse_iter(lexer: &mut impl Iterator<Item = Token>) -> Vec<Result<Self, E>> {
-        let mut peekable = lexer.peekable();
-        let mut results = Vec::new();
+    fn parse_iter(
+        lexer: &mut impl Iterator<Item = Token>,
+        pos: &FilePosition,
+    ) -> Vec<Result<Self, E>> {
+        Self::tracked_parse_iter(lexer, pos).0
+    }
 
-        while peekable.peek().is_some() {
-            results.push(Self::try_parse(&mut peekable, &FilePosition::default()));
+    fn tracked_parse_iter(
+        lexer: &mut impl Iterator<Item = Token>,
+        pos: &FilePosition,
+    ) -> (Vec<Result<Self, E>>, FilePosition) {
+        let mut peeking = lexer.peekable();
+        let mut last_pos = pos.clone();
+
+        let mut results = Vec::new();
+        while let Some(peeked) = peeking.peek() {
+            last_pos = peeked.pos.clone();
+            results.push(Self::try_parse(&mut peeking, &last_pos));
         }
 
-        results
+        (results, last_pos)
     }
 }
 
@@ -164,7 +176,7 @@ impl Parse<ParseError> for Phoneme {
         let mut tokens = read_until_closed(lexer, RawToken::PhonemeClose, pos)?;
 
         Ok(Phoneme {
-            attributes: Attribute::parse_iter(&mut tokens),
+            attributes: Attribute::parse_iter(&mut tokens, pos),
             pos: pos.clone(),
         })
     }
@@ -184,7 +196,7 @@ impl Parse<ParseError> for Filter {
         let mut tokens = read_until_closed(lexer, RawToken::FilterSelectorClose, pos)?;
 
         Ok(Filter {
-            attributes: Attribute::parse_iter(&mut tokens),
+            attributes: Attribute::parse_iter(&mut tokens, pos),
             pos: pos.clone(),
         })
     }
@@ -227,12 +239,18 @@ impl Parse<ParseError> for OutputPhoneme {
         lexer: &mut impl Iterator<Item = Token>,
         pos: &FilePosition,
     ) -> Result<Self, ParseError> {
-        confirm_token(lexer, RawToken::PhonemeOpen, pos)?;
+        let open_token = read_token(lexer, Expectation::OutputAtom, pos)?;
 
-        let mut tokens = read_until_closed(lexer, RawToken::PhonemeClose, pos)?;
+        let attributes = match open_token.token {
+            RawToken::PhonemeOpen => Attribute::parse_iter(
+                &mut read_until_closed(lexer, RawToken::PhonemeClose, pos)?,
+                pos,
+            ),
+            _ => Attribute::parse_iter(&mut std::iter::once(open_token), pos),
+        };
 
         Ok(OutputPhoneme {
-            attributes: Attribute::parse_iter(&mut tokens),
+            attributes,
             pos: pos.clone(),
         })
     }
@@ -308,31 +326,6 @@ impl Parse<ParseError> for EnvironmentAtom {
     }
 }
 
-fn get_env_atom_pos(atom: &EnvironmentAtom) -> Option<&FilePosition> {
-    let ok_pos = match &atom {
-        EnvironmentAtom::Phoneme(inner) => inner.as_ref().map(|i| Some(&i.pos)),
-        EnvironmentAtom::Filter(inner) => inner.as_ref().map(|i| Some(&i.pos)),
-        EnvironmentAtom::Identifier(inner) => inner.as_ref().map(|i| Some(&i.pos)),
-        EnvironmentAtom::Optional(inner) => inner.as_ref().as_ref().map(|i| get_env_atom_pos(i)),
-        EnvironmentAtom::ZeroOrMore(inner) => inner.as_ref().as_ref().map(|i| get_env_atom_pos(i)),
-        EnvironmentAtom::Not(inner) => inner.as_ref().as_ref().map(|i| get_env_atom_pos(i)),
-    };
-
-    ok_pos.unwrap_or_else(|e| e.pos.as_ref())
-}
-
-fn get_env_side_last_pos<'a>(
-    side: &'a [Result<EnvironmentAtom, ParseError>],
-    fallback: &'a FilePosition,
-) -> &'a FilePosition {
-    side.last()
-        .and_then(|last| {
-            last.as_ref()
-                .map_or_else(|e| e.pos.as_ref(), get_env_atom_pos)
-        })
-        .unwrap_or(fallback)
-}
-
 #[derive(Debug, PartialEq)]
 struct Environment {
     start: bool,
@@ -348,14 +341,25 @@ impl Parse<ParseError> for Environment {
     ) -> Result<Self, ParseError> {
         let mut peeking = lexer.peekable();
 
+        // If there isn't anything environment, return a blank environment. Then
+        // make sure what we think is an environment actually is one.
+        if peeking.peek().is_none() {
+            return Ok(Environment {
+                start: false,
+                end: false,
+                pre: Vec::new(),
+                post: Vec::new(),
+            });
+        }
+        confirm_token(&mut peeking, RawToken::Environment, pos)?;
+
         let start = peeking
             .peeking_next(|token| token.token == RawToken::WordBoundry)
             .is_some();
 
         let mut pre_lexer = peeking.peeking_take_while(|token| token.token != RawToken::Target);
-        let pre = EnvironmentAtom::parse_iter(&mut pre_lexer);
-        let last_pos = get_env_side_last_pos(&pre, pos);
-        confirm_token(&mut peeking, RawToken::Target, last_pos)?;
+        let (pre, last_pos) = EnvironmentAtom::tracked_parse_iter(&mut pre_lexer, pos);
+        confirm_token(&mut peeking, RawToken::Target, &last_pos)?;
 
         let mut end = false;
         // We don't want to pass the actual end word boundary to the environment
@@ -373,7 +377,7 @@ impl Parse<ParseError> for Environment {
                 Some(token)
             }
         });
-        let post = EnvironmentAtom::parse_iter(&mut post_lexer);
+        let post = EnvironmentAtom::parse_iter(&mut post_lexer, pos);
 
         Ok(Self {
             start,
@@ -384,10 +388,41 @@ impl Parse<ParseError> for Environment {
     }
 }
 
+#[derive(Debug, PartialEq)]
 struct Rule {
-    inputs: Vec<InputAtom>,
-    outputs: Vec<Phoneme>,
-    env: Environment,
+    input: Vec<Result<InputAtom, ParseError>>,
+    output: Vec<Result<OutputPhoneme, ParseError>>,
+    env: Result<Environment, ParseError>,
+}
+
+impl Parse<ParseError> for Rule {
+    fn try_parse(
+        lexer: &mut impl Iterator<Item = Token>,
+        pos: &FilePosition,
+    ) -> Result<Self, ParseError> {
+        let mut line = read_until(lexer, &RawToken::Eol).peekable();
+
+        let mut core_rule = line.peeking_take_while(|token| token.token != RawToken::Environment);
+
+        let mut input_iter = core_rule.peeking_take_while(|token| token.token != RawToken::Output);
+        let (input, pos) = InputAtom::tracked_parse_iter(&mut input_iter, pos);
+
+        let (output, pos) = parse_rule_output(&mut core_rule, pos);
+
+        let env = Environment::try_parse(&mut line, &pos);
+
+        Ok(Self { input, output, env })
+    }
+}
+
+fn parse_rule_output(
+    lexer: &mut impl PeekingNext<Item = Token>,
+    pos: FilePosition,
+) -> (Vec<Result<OutputPhoneme, ParseError>>, FilePosition) {
+    match lexer.peeking_next(|token| token.token == RawToken::Output) {
+        Some(token) => OutputPhoneme::tracked_parse_iter(lexer, &token.pos),
+        None => (vec![Err(eof(pos.clone(), RawToken::Output))], pos),
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -500,11 +535,11 @@ fn confirm_token(
     lexer: &mut impl Iterator<Item = Token>,
     token: RawToken,
     pos: &FilePosition,
-) -> Result<(), ParseError> {
+) -> Result<Token, ParseError> {
     match lexer.next() {
         Some(found_token) => {
             if found_token.token == token {
-                Ok(())
+                Ok(found_token)
             } else {
                 Err(unexpect(found_token, token))
             }
