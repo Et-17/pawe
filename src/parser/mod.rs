@@ -480,6 +480,118 @@ impl Parse<Vec<ParseError>> for DiacriticDefinition {
     }
 }
 
+#[derive(Debug, PartialEq)]
+struct CharacterDefinition {
+    character: Identifier,
+    definition: Result<Phoneme, ParseError>,
+    excess_tokens: Vec<ParseError>,
+}
+
+impl Parse<Vec<ParseError>> for CharacterDefinition {
+    fn try_parse(
+        lexer: &mut impl Iterator<Item = Token>,
+        pos: &FilePosition,
+    ) -> Result<Self, Vec<ParseError>> {
+        let (pos, character) = match Identifier::try_parse(lexer, pos) {
+            Ok(c) => (c.pos.clone(), c),
+            Err(e) => {
+                let mut errors = vec![e];
+                errors.extend(end_line(lexer));
+                return Err(errors);
+            }
+        };
+
+        let definition = read_token(lexer, RawToken::PhonemeOpen, &pos)
+            .and_then(|initial| parse_character_def_body(lexer, initial));
+
+        let excess_tokens = end_line(lexer).collect();
+
+        Ok(Self {
+            character,
+            definition,
+            excess_tokens,
+        })
+    }
+}
+
+fn parse_character_def_body(
+    lexer: &mut impl Iterator<Item = Token>,
+    initial: Token,
+) -> Result<Phoneme, ParseError> {
+    match initial.token {
+        RawToken::UnmarkedIdentifier(character) => {
+            let def_attr = PhonemeAttribute {
+                kind: PhonemeAttributeKind::Character(character),
+                pos: initial.pos.clone(),
+            };
+            Ok(Phoneme {
+                attributes: vec![Ok(def_attr)],
+                pos: initial.pos,
+            })
+        }
+        RawToken::PhonemeOpen => Phoneme::try_parse(lexer, &initial.pos),
+        _ => Err(unexpect(initial, RawToken::PhonemeOpen)),
+    }
+}
+
+#[derive(Debug, PartialEq)]
+struct ParameterDefinition {
+    parameter: Identifier,
+    variants: Vec<Result<Identifier, ParseError>>,
+}
+
+impl Parse<Vec<ParseError>> for ParameterDefinition {
+    fn try_parse(
+        lexer: &mut impl Iterator<Item = Token>,
+        pos: &FilePosition,
+    ) -> Result<Self, Vec<ParseError>> {
+        let (pos, parameter) = match Identifier::try_parse(lexer, pos) {
+            Ok(p) => (p.pos.clone(), p),
+            Err(e) => {
+                let mut errors = vec![e];
+                errors.extend(end_line(lexer));
+                return Err(errors);
+            }
+        };
+
+        let variants = Identifier::parse_iter(&mut read_until(lexer, &RawToken::Eol), &pos);
+
+        Ok(Self {
+            parameter,
+            variants,
+        })
+    }
+}
+
+#[derive(Debug, PartialEq)]
+struct IdentifierLine {
+    identifier: Identifier,
+    excess_tokens: Vec<ParseError>,
+}
+
+impl Parse<Vec<ParseError>> for IdentifierLine {
+    fn try_parse(
+        lexer: &mut impl Iterator<Item = Token>,
+        pos: &FilePosition,
+    ) -> Result<Self, Vec<ParseError>> {
+        let identifier = match Identifier::try_parse(lexer, pos) {
+            Ok(i) => i,
+            Err(e) => {
+                let mut errors = vec![e];
+                errors.extend(end_line(lexer));
+                return Err(errors);
+            }
+        };
+
+        let excess_tokens = end_line(lexer).collect();
+
+        Ok(Self {
+            identifier,
+            excess_tokens,
+        })
+    }
+}
+
 enum DefinitionBlock {
     Languages(Vec<Identifier>),
     Parameters(Vec<(Identifier, Vec<Identifier>)>),

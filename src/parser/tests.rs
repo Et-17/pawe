@@ -600,3 +600,153 @@ fn rule_without_output() {
 
     assert_eq!(actual, expected);
 }
+
+//ABCDEFGHIJKLMNOPQRSTUVWXYZ
+#[test]
+fn character_definition_phoneme() {
+    let input_str = "alpha [+bravo -charlie.delta] echo foxtrot;";
+
+    let e_lexer = &mut lex_str(input_str);
+    let character = Identifier::try_parse(e_lexer, &FilePosition::default()).unwrap();
+    let def_pos = e_lexer.next().unwrap().pos;
+    let definition = Phoneme::try_parse(e_lexer, &def_pos);
+    let excess_tokens = super::end_line(e_lexer).collect_vec();
+    let expected = Ok(CharacterDefinition {
+        character,
+        definition,
+        excess_tokens,
+    });
+
+    let actual = CharacterDefinition::try_parse(&mut lex_str(input_str), &FilePosition::default());
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn character_definition_character() {
+    let input_str = "alpha bravo echo foxtrot;";
+
+    let e_lexer = &mut lex_str(input_str);
+    let character = Identifier::try_parse(e_lexer, &FilePosition::default()).unwrap();
+    let def_tok_pos = e_lexer.next().unwrap().pos;
+    let def_attr = PhonemeAttribute {
+        kind: PhonemeAttributeKind::Character("bravo".to_string()),
+        pos: def_tok_pos.clone(),
+    };
+    let excess_tokens = super::end_line(e_lexer).collect_vec();
+    let definition = Ok(Phoneme {
+        attributes: vec![Ok(def_attr)],
+        pos: def_tok_pos,
+    });
+    let expected = Ok(CharacterDefinition {
+        character,
+        definition,
+        excess_tokens,
+    });
+
+    let actual = CharacterDefinition::try_parse(&mut lex_str(input_str), &FilePosition::default());
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn invalid_character_definition() {
+    let input_str = "# alpha bravo;";
+
+    let e_lexer = &mut lex_str(input_str);
+    let error = unexpect(e_lexer.next().unwrap(), Expectation::Identifier);
+    let mut errors = vec![error];
+    errors.extend(super::end_line(e_lexer));
+    let expected = Err(errors);
+
+    let actual = CharacterDefinition::try_parse(&mut lex_str(input_str), &FilePosition::default());
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn char_def_invalid_def() {
+    let input_str = "alpha #;";
+
+    let e_lexer = &mut lex_str(input_str);
+    let character = Identifier::try_parse(e_lexer, &FilePosition::default()).unwrap();
+    let definition = Err(unexpect(e_lexer.next().unwrap(), RawToken::PhonemeOpen));
+    let expected = Ok(CharacterDefinition {
+        character,
+        definition,
+        excess_tokens: Vec::new(),
+    });
+
+    let actual = CharacterDefinition::try_parse(&mut lex_str(input_str), &FilePosition::default());
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn parameter_definition() {
+    let input_str = "alpha bravo charlie delta; echo";
+
+    let e_lexer = &mut lex_str(input_str);
+    let parameter = Identifier::try_parse(e_lexer, &FilePosition::default()).unwrap();
+    let variants = Identifier::parse_iter(&mut e_lexer.take(3), &FilePosition::default());
+    let expected = Ok(ParameterDefinition {
+        parameter,
+        variants,
+    });
+    e_lexer.next().unwrap();
+    let expected_tail = e_lexer.collect_vec();
+
+    let a_lexer = &mut lex_str(input_str);
+    let actual = ParameterDefinition::try_parse(a_lexer, &FilePosition::default());
+    let actual_tail = a_lexer.collect_vec();
+
+    assert_eq!(actual, expected);
+    assert_eq!(actual_tail, expected_tail);
+}
+
+#[test]
+fn invalid_parameter_definition() {
+    let input_str = "# bravo charlie;";
+
+    let e_lexer = &mut lex_str(input_str);
+    let error = unexpect(e_lexer.next().unwrap(), Expectation::Identifier);
+    let mut errors = vec![error];
+    errors.extend(super::end_line(e_lexer));
+    let expected = Err(errors);
+
+    let actual = ParameterDefinition::try_parse(&mut lex_str(input_str), &FilePosition::default());
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn identifier_line() {
+    let input_str = "alpha bravo charlie;";
+
+    let e_lexer = &mut lex_str(input_str);
+    let identifier = Identifier::try_parse(e_lexer, &FilePosition::default()).unwrap();
+    let excess_tokens = super::end_line(e_lexer).collect_vec();
+    let expected = Ok(IdentifierLine {
+        identifier,
+        excess_tokens,
+    });
+
+    let actual = IdentifierLine::try_parse(&mut lex_str(input_str), &FilePosition::default());
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn invalid_identifier_line() {
+    let input_str = "# alpha bravo;";
+
+    let e_lexer = &mut lex_str(input_str);
+    let error = unexpect(e_lexer.next().unwrap(), Expectation::Identifier);
+    let mut errors = vec![error];
+    errors.extend(super::end_line(e_lexer));
+    let expected = Err(errors);
+
+    let actual = IdentifierLine::try_parse(&mut lex_str(input_str), &FilePosition::default());
+
+    assert_eq!(actual, expected);
+}
