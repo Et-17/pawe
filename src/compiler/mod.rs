@@ -19,13 +19,25 @@ pub fn parse_config_file(path: std::path::PathBuf) -> ResultV<Config> {
         wrap_io_error("parser", Some(&file_pos))(e)
     })?;
 
-    Lexer::lex(std::io::BufReader::new(file), Some(path))
-        .process_results(|mut tokens| parse_config(&mut tokens))?
+    let mut tokens = Lexer::lex(std::io::BufReader::new(file), Some(path));
+    let parsed = parse_config(&mut tokens);
+
+    if let Some(e) = tokens.io_error {
+        Err(e.into())
+    } else {
+        parsed
+    }
 }
 
 pub fn parse_word(word: &str, config: &Config) -> ResultV<Vec<Phoneme>> {
-    Lexer::lex(std::io::Cursor::new(word), None)
-        .process_results(|mut tokens| parse_unwrapped_word(&mut tokens, config))?
+    let mut tokens = Lexer::lex(std::io::Cursor::new(word), None);
+    let parsed = parse_unwrapped_word(&mut tokens, config);
+
+    if let Some(e) = tokens.io_error {
+        Err(e.into())
+    } else {
+        parsed
+    }
 }
 
 fn parse_unwrapped_word(

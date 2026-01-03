@@ -9,18 +9,23 @@ use itertools::{Itertools, PeekingNext};
 use unicode_normalization::UnicodeNormalization;
 
 use crate::cli::RAW_INPUT;
-use crate::error_handling::{FilePosition, Result, wrap_io_error};
+use crate::error_handling::{Error, FilePosition, IOError, wrap_io_error};
 use crate::phonemes::SelectorCode;
 
+// If this encounters an IO error, it will write it to io_error and then stop
+// iteration by returning None, so that calling functions don't have to
+// seperate errors themselves. Instead, they must ensure that no error has
+// occured after iteration stops.
 pub struct Lexer<T: BufRead> {
     file: T,
     current_line_tokens: VecDeque<Token>,
     line_num: usize,
     path: Option<Rc<Path>>, // For generating errors
+    pub io_error: Option<Error<IOError>>,
 }
 
 impl<T: BufRead> Lexer<T> {
-    fn lex_line(&mut self) -> Option<Result<()>> {
+    fn lex_line(&mut self) -> Option<Result<(), Error<IOError>>> {
         let mut next_line = String::new();
         let read_amount = self.file.read_line(&mut next_line);
 
@@ -72,21 +77,27 @@ impl<T: BufRead> Lexer<T> {
             current_line_tokens: VecDeque::new(),
             line_num: 0,
             path: path.map(Into::into),
+            io_error: None,
         }
     }
 }
 
 impl<T: BufRead> Iterator for Lexer<T> {
-    type Item = Result<Token>;
+    type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
+        if self.io_error.is_some() {
+            return None;
+        }
+
         while self.current_line_tokens.is_empty() {
             if let Err(e) = self.lex_line()? {
-                return Some(Err(e));
+                self.io_error = Some(e);
+                return None;
             }
         }
 
-        Ok(self.current_line_tokens.pop_front()).transpose()
+        self.current_line_tokens.pop_front()
     }
 }
 

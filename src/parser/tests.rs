@@ -6,7 +6,7 @@ use super::*;
 use crate::lexer::Lexer;
 
 fn lex_str(input: &'static str) -> impl Iterator<Item = Token> {
-    Lexer::lex(std::io::Cursor::new(input), None).map(Result::unwrap)
+    Lexer::lex(std::io::Cursor::new(input), None)
 }
 
 fn str_positions(input: &'static str) -> impl Iterator<Item = FilePosition> {

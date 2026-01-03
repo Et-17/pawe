@@ -9,7 +9,7 @@ use crate::phonemes::SelectorCode;
 use errors::{Expectation, eof, unexpect};
 
 use errors::ParseErrorType::*;
-use itertools::{Itertools, PeekingNext, PeekingTakeWhile};
+use itertools::{Itertools, PeekingNext};
 
 trait Parse<E>: Sized {
     fn try_parse(lexer: &mut impl Iterator<Item = Token>, pos: &FilePosition) -> Result<Self, E>;
@@ -717,10 +717,6 @@ impl Parse<ParseError> for DefinitionBlock {
             _ => Err(unexpect(keyword, Expectation::DefinitionKeyword)),
         }
     }
-}
-
-struct Configuration {
-    definitions: Vec<Result<DefinitionBlock, ParseError>>,
 }
 
 fn end_line(lexer: &mut impl Iterator<Item = Token>) -> impl Iterator<Item = ParseError> {

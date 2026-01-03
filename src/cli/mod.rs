@@ -91,7 +91,8 @@ fn verify_config_existence(path: PathBuf) -> Result<PathBuf> {
         Err(err) => Err(wrap_io_error(
             "cli",
             Some(&FilePosition::new(Some(&path.into()), None, None)),
-        )(err)),
+        )(err)
+        .into()),
     }
 }
 

@@ -138,7 +138,7 @@ pub fn check_errors<T, E, V: Into<Vec<E>>>(ok: T, errors: V) -> std::result::Res
 
 // For wrapping IO errors, so they can be handled in a unified manner
 #[derive(Debug)]
-struct IOError(std::io::Error);
+pub struct IOError(std::io::Error);
 
 impl ErrorType for IOError {
     fn module(&self) -> String {
@@ -156,7 +156,7 @@ impl Display for IOError {
 pub fn wrap_io_error(
     module: impl ToString,
     pos: Option<&FilePosition>,
-) -> impl Fn(std::io::Error) -> Error {
+) -> impl Fn(std::io::Error) -> Error<IOError> {
     move |error: std::io::Error| Error {
         pos: pos.cloned(),
         module: module.to_string(),
