@@ -750,3 +750,191 @@ fn invalid_identifier_line() {
 
     assert_eq!(actual, expected);
 }
+
+#[test]
+fn block() {
+    let input_str = "{ alpha; bravo; charlie } delta";
+
+    let e_lexer = &mut lex_str(input_str);
+    let pos = e_lexer.next().unwrap().pos;
+    let definitions = IdentifierLine::parse_iter(&mut e_lexer.take(5), &pos);
+    let expected = Ok(Block {
+        definitions,
+        close_error: Ok(()),
+        pos,
+    });
+    e_lexer.next().unwrap();
+    let expected_tail = e_lexer.collect_vec();
+
+    let a_lexer = &mut lex_str(input_str);
+    let actual =
+        Block::<IdentifierLine, Vec<ParseError>>::try_parse(a_lexer, &FilePosition::default());
+    let actual_tail = a_lexer.collect_vec();
+
+    assert_eq!(actual, expected);
+    assert_eq!(actual_tail, expected_tail);
+}
+
+#[test]
+fn invalid_block() {
+    let input_str = "# alpha";
+
+    let e_lexer = &mut lex_str(input_str);
+    let expected = Err(unexpect(e_lexer.next().unwrap(), RawToken::BlockOpen));
+    let expected_tail = e_lexer.collect_vec();
+
+    let a_lexer = &mut lex_str(input_str);
+    let actual =
+        Block::<IdentifierLine, Vec<ParseError>>::try_parse(a_lexer, &FilePosition::default());
+    let actual_tail = a_lexer.collect_vec();
+
+    assert_eq!(actual, expected);
+    assert_eq!(actual_tail, expected_tail);
+}
+
+#[test]
+fn confirm_to_existence() {
+    let input_str = "to";
+
+    let pos = str_positions(input_str).next().unwrap();
+    let expected = (Ok(()), pos);
+
+    let actual =
+        super::confirm_to_existence(&mut lex_str(input_str).peekable(), &FilePosition::default());
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn non_ident_invalid_to() {
+    let input_str = "#";
+
+    let e_lexer = &mut lex_str(input_str).peekable();
+    let token = e_lexer.next().unwrap();
+    let pos = token.pos.clone();
+    let expected = (Err(super::unexpect(token, RawToken::To)), pos);
+    let expected_tail = e_lexer.collect_vec();
+
+    let a_lexer = &mut lex_str(input_str).peekable();
+    let actual = super::confirm_to_existence(a_lexer, &FilePosition::default());
+    let actual_tail = a_lexer.collect_vec();
+
+    assert_eq!(actual, expected);
+    assert_eq!(actual_tail, expected_tail);
+}
+
+#[test]
+fn ident_invalid_to() {
+    let input_str = "alpha";
+
+    let e_lexer = &mut lex_str(input_str).peekable();
+    let expected = (
+        Err(super::eof(FilePosition::default(), RawToken::To)),
+        FilePosition::default(),
+    );
+    let expected_tail = e_lexer.next().unwrap();
+
+    let a_lexer = &mut lex_str(input_str).peekable();
+    let actual = super::confirm_to_existence(a_lexer, &FilePosition::default());
+    let actual_tail = a_lexer.next().unwrap();
+
+    assert_eq!(actual, expected);
+    assert_eq!(actual_tail, expected_tail);
+}
+
+#[test]
+fn evolution() {
+    let input_str = "alpha to bravo { charlie > delta }";
+
+    let e_lexer = &mut lex_str(input_str);
+    let start = Identifier::try_parse(e_lexer, &FilePosition::default());
+    e_lexer.next().unwrap(); // skip to
+    let end = Identifier::try_parse(e_lexer, &FilePosition::default());
+    let block_open_pos = e_lexer.next().unwrap().pos;
+    let definitions = Rule::parse_iter(&mut e_lexer.take(3), &FilePosition::default());
+    let rules = Ok(Block {
+        definitions,
+        close_error: Ok(()),
+        pos: block_open_pos,
+    });
+    let expected = Ok(Evolution {
+        start,
+        missing_to: Ok(()),
+        end,
+        rules,
+    });
+
+    let actual = Evolution::try_parse(&mut lex_str(input_str), &FilePosition::default());
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn invalid_evolution_pos_stability() {
+    let start_input_str = "#";
+    let end_input_str = "alpha to #";
+
+    let e_start = lex_str(start_input_str).next().unwrap().pos;
+    let e_end = lex_str(end_input_str).nth(2).unwrap().pos;
+
+    let a_start = Evolution::try_parse(&mut lex_str(start_input_str), &FilePosition::default())
+        .unwrap()
+        .missing_to
+        .unwrap_err()
+        .pos
+        .unwrap();
+    let a_end = Evolution::try_parse(&mut lex_str(end_input_str), &FilePosition::default())
+        .unwrap()
+        .rules
+        .unwrap_err()
+        .pos
+        .unwrap();
+
+    assert_eq!(a_start, e_start);
+    assert_eq!(a_end, e_end);
+}
+
+#[test]
+fn definition_block() {
+    let input_str = "languages {} parameters {} features {} characters {} diacritics {} evolve alpha to bravo {}";
+
+    let e_lexer = &mut lex_str(input_str);
+    e_lexer.next().unwrap(); // skip languages
+    let languages = Block::try_parse(e_lexer, &FilePosition::default()).unwrap();
+    e_lexer.next().unwrap(); // skip parameters
+    let parameters = Block::try_parse(e_lexer, &FilePosition::default()).unwrap();
+    e_lexer.next().unwrap(); // skip features
+    let features = Block::try_parse(e_lexer, &FilePosition::default()).unwrap();
+    e_lexer.next().unwrap(); // skip characters
+    let characters = Block::try_parse(e_lexer, &FilePosition::default()).unwrap();
+    e_lexer.next().unwrap(); // skip diacritics
+    let diacritics = Block::try_parse(e_lexer, &FilePosition::default()).unwrap();
+    e_lexer.next().unwrap(); // skip evolve
+    let evolve = Evolution::try_parse(e_lexer, &FilePosition::default()).unwrap();
+    let expected = vec![
+        Ok(DefinitionBlock::Languages(languages)),
+        Ok(DefinitionBlock::Parameters(parameters)),
+        Ok(DefinitionBlock::Features(features)),
+        Ok(DefinitionBlock::Characters(characters)),
+        Ok(DefinitionBlock::Diacritics(diacritics)),
+        Ok(DefinitionBlock::Evolve(Box::new(evolve))),
+    ];
+
+    let actual = DefinitionBlock::parse_iter(&mut lex_str(input_str), &FilePosition::default());
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn invalid_def_block_keyword() {
+    let input_str = "alpha";
+
+    let expected = Err(unexpect(
+        lex_str(input_str).next().unwrap(),
+        Expectation::DefinitionKeyword,
+    ));
+
+    let actual = DefinitionBlock::try_parse(&mut lex_str(input_str), &FilePosition::default());
+
+    assert_eq!(actual, expected);
+}

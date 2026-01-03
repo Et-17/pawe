@@ -592,17 +592,135 @@ impl Parse<Vec<ParseError>> for IdentifierLine {
     }
 }
 
+#[derive(Debug, PartialEq)]
+struct Block<T: Parse<E>, E> {
+    definitions: Vec<Result<T, E>>,
+    // For recording if the block is not closed properly
+    close_error: Result<(), ParseError>,
+    pos: FilePosition,
+}
+
+impl<T: Parse<E>, E> Parse<ParseError> for Block<T, E> {
+    fn try_parse(
+        lexer: &mut impl Iterator<Item = Token>,
+        pos: &FilePosition,
+    ) -> Result<Self, ParseError> {
+        let open_pos = confirm_token(lexer, RawToken::BlockOpen, pos)?.pos;
+
+        let mut peekable = lexer.peekable();
+        let mut block = peekable.peeking_take_while(|token| token.token != RawToken::BlockClose);
+
+        let (definitions, pos) = T::tracked_parse_iter(&mut block, pos);
+
+        let close_error = confirm_token(&mut peekable, RawToken::BlockClose, &pos).map(|_| ());
+
+        Ok(Self {
+            definitions,
+            close_error,
+            pos: open_pos,
+        })
+    }
+}
+
+#[derive(Debug, PartialEq)]
+struct Evolution {
+    start: Result<Identifier, ParseError>,
+    // For recording if `to` is absent
+    missing_to: Result<(), ParseError>,
+    end: Result<Identifier, ParseError>,
+    rules: Result<Block<Rule, ParseError>, ParseError>,
+}
+
+impl Parse<ParseError> for Evolution {
+    fn try_parse(
+        lexer: &mut impl Iterator<Item = Token>,
+        pos: &FilePosition,
+    ) -> Result<Self, ParseError> {
+        let peekable = &mut lexer.peekable();
+
+        let start = Identifier::try_parse(peekable, pos);
+        let pos = match &start {
+            Ok(i) => &i.pos,
+            Err(e) => e.pos.as_ref().unwrap_or(pos),
+        };
+
+        let (missing_to, pos) = confirm_to_existence(peekable, pos);
+
+        let end = Identifier::try_parse(peekable, &pos);
+        let pos = match &end {
+            Ok(i) => &i.pos,
+            Err(e) => e.pos.as_ref().unwrap_or(&pos),
+        };
+
+        let rules = Block::<Rule, ParseError>::try_parse(peekable, pos);
+
+        Ok(Self {
+            start,
+            missing_to,
+            end,
+            rules,
+        })
+    }
+}
+
+// Checks that the user wrote `to` between the start and end languages of an
+// evolution definition. If they just forgot the `to` and did write an end
+// language, we don't want to consume the end language before it can be parsed
+// as such, but if they didn't have an end language, we don't want to double
+// error the non-`to` token. We return a tuple to pass through the new end pos.
+fn confirm_to_existence(
+    lexer: &mut std::iter::Peekable<impl Iterator<Item = Token>>,
+    pos: &FilePosition,
+) -> (Result<(), ParseError>, FilePosition) {
+    let is_to = |token: &Token| token.token == RawToken::To;
+    // We have to use matches! because UnmarkedIdentifier has a variable we need
+    // to tell the matcher to ignore
+    let is_not_id = |token: &Token| !matches!(token.token, RawToken::UnmarkedIdentifier(_));
+
+    if let Some(to_token) = lexer.peeking_next(is_to) {
+        (Ok(()), to_token.pos)
+    } else if let Some(non_ident_or_to) = lexer.peeking_next(is_not_id) {
+        let new_pos = non_ident_or_to.pos.clone();
+        (Err(unexpect(non_ident_or_to, RawToken::To)), new_pos)
+    } else {
+        (Err(eof(pos.clone(), RawToken::To)), pos.clone())
+    }
+}
+
+#[derive(Debug, PartialEq)]
 enum DefinitionBlock {
-    Languages(Vec<Identifier>),
-    Parameters(Vec<(Identifier, Vec<Identifier>)>),
-    Features(Vec<Identifier>),
-    Characters(Vec<(Identifier, Phoneme)>),
-    Diacritics(Vec<DiacriticDefinition>),
-    Evolve(Identifier, Identifier, Vec<Rule>),
+    Languages(Block<IdentifierLine, Vec<ParseError>>),
+    Parameters(Block<ParameterDefinition, Vec<ParseError>>),
+    Features(Block<IdentifierLine, Vec<ParseError>>),
+    Characters(Block<CharacterDefinition, Vec<ParseError>>),
+    Diacritics(Block<DiacriticDefinition, Vec<ParseError>>),
+    Evolve(Box<Evolution>),
+}
+
+impl Parse<ParseError> for DefinitionBlock {
+    fn try_parse(
+        lexer: &mut impl Iterator<Item = Token>,
+        pos: &FilePosition,
+    ) -> Result<Self, ParseError> {
+        let keyword = read_token(lexer, Expectation::DefinitionKeyword, pos)?;
+        let pos = &keyword.pos;
+
+        match keyword.token {
+            RawToken::Languages => Block::try_parse(lexer, pos).map(Self::Languages),
+            RawToken::Parameters => Block::try_parse(lexer, pos).map(Self::Parameters),
+            RawToken::Features => Block::try_parse(lexer, pos).map(Self::Features),
+            RawToken::Characters => Block::try_parse(lexer, pos).map(Self::Characters),
+            RawToken::Diacritics => Block::try_parse(lexer, pos).map(Self::Diacritics),
+            RawToken::Evolve => Evolution::try_parse(lexer, pos)
+                .map(Box::new)
+                .map(Self::Evolve),
+            _ => Err(unexpect(keyword, Expectation::DefinitionKeyword)),
+        }
+    }
 }
 
 struct Configuration {
-    definitions: Vec<DefinitionBlock>,
+    definitions: Vec<Result<DefinitionBlock, ParseError>>,
 }
 
 fn end_line(lexer: &mut impl Iterator<Item = Token>) -> impl Iterator<Item = ParseError> {
