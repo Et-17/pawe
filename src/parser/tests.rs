@@ -1,5 +1,7 @@
 use itertools::Itertools;
 use std::fmt::Debug;
+use std::fs::File;
+use std::io::BufReader;
 
 use super::errors::ParseErrorType;
 use super::*;
@@ -895,10 +897,11 @@ fn invalid_evolution_pos_stability() {
 }
 
 #[test]
-fn definition_block() {
-    let input_str = "languages {} parameters {} features {} characters {} diacritics {} evolve alpha to bravo {}";
+fn config_parser() {
+    let input_file = PathBuf::from("./examples/blank.paw");
 
-    let e_lexer = &mut lex_str(input_str);
+    let e_file = File::open(&input_file).unwrap();
+    let e_lexer = &mut Lexer::lex(BufReader::new(e_file), Some(input_file.clone()));
     e_lexer.next().unwrap(); // skip languages
     let languages = Block::try_parse(e_lexer, &FilePosition::default()).unwrap();
     e_lexer.next().unwrap(); // skip parameters
@@ -911,6 +914,7 @@ fn definition_block() {
     let diacritics = Block::try_parse(e_lexer, &FilePosition::default()).unwrap();
     e_lexer.next().unwrap(); // skip evolve
     let evolve = Evolution::try_parse(e_lexer, &FilePosition::default()).unwrap();
+    let invalid = unexpect(e_lexer.next().unwrap(), Expectation::DefinitionKeyword);
     let expected = vec![
         Ok(DefinitionBlock::Languages(languages)),
         Ok(DefinitionBlock::Parameters(parameters)),
@@ -918,23 +922,31 @@ fn definition_block() {
         Ok(DefinitionBlock::Characters(characters)),
         Ok(DefinitionBlock::Diacritics(diacritics)),
         Ok(DefinitionBlock::Evolve(Box::new(evolve))),
+        Err(invalid),
     ];
 
-    let actual = DefinitionBlock::parse_iter(&mut lex_str(input_str), &FilePosition::default());
+    let parser = ConfigParser::new(input_file).unwrap();
+    let actual = parser.collect_vec();
 
     assert_eq!(actual, expected);
 }
 
 #[test]
-fn invalid_def_block_keyword() {
-    let input_str = "alpha";
+fn invalid_path_cfg_prsr() {
+    let input_file = PathBuf::from("./invalid/invalid.paw");
 
-    let expected = Err(unexpect(
-        lex_str(input_str).next().unwrap(),
-        Expectation::DefinitionKeyword,
-    ));
+    let actual = ConfigParser::new(input_file);
 
-    let actual = DefinitionBlock::try_parse(&mut lex_str(input_str), &FilePosition::default());
+    assert!(actual.is_err());
+}
 
-    assert_eq!(actual, expected);
+#[test]
+fn invalid_char_cfg_prsr() {
+    let input_file = PathBuf::from("./examples/invalid_utf8.paw");
+
+    let mut actual = ConfigParser::new(input_file).unwrap();
+    while actual.next().is_some() {}
+
+    assert_eq!(actual.io_error.len(), 1);
+    assert!(actual.next().is_none());
 }

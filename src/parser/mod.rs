@@ -2,8 +2,10 @@ mod errors;
 #[cfg(test)]
 mod tests;
 
-use crate::error_handling::{ErrorType, FilePosition};
-use crate::lexer::{RawToken, Token};
+use std::path::PathBuf;
+
+use crate::error_handling::{ErrorType, FilePosition, wrap_io_error};
+use crate::lexer::{Lexer, RawToken, Token};
 use crate::parser::errors::ParseError;
 use crate::phonemes::SelectorCode;
 use errors::{Expectation, eof, unexpect};
@@ -688,7 +690,7 @@ fn confirm_to_existence(
 }
 
 #[derive(Debug, PartialEq)]
-enum DefinitionBlock {
+pub enum DefinitionBlock {
     Languages(Block<IdentifierLine, Vec<ParseError>>),
     Parameters(Block<ParameterDefinition, Vec<ParseError>>),
     Features(Block<IdentifierLine, Vec<ParseError>>),
@@ -697,24 +699,69 @@ enum DefinitionBlock {
     Evolve(Box<Evolution>),
 }
 
-impl Parse<ParseError> for DefinitionBlock {
-    fn try_parse(
-        lexer: &mut impl Iterator<Item = Token>,
-        pos: &FilePosition,
-    ) -> Result<Self, ParseError> {
-        let keyword = read_token(lexer, Expectation::DefinitionKeyword, pos)?;
-        let pos = &keyword.pos;
+// We want the full parser iterators to be able to detect EOF, which means that
+// they'll need to consume the first token, which then needs to be passed to
+// this function. Additionally, this function does not need a fallback pos. For
+// these reasons, we cannot implement Parse.
+fn parse_definition_block(
+    lexer: &mut impl Iterator<Item = Token>,
+    keyword: Token,
+) -> Result<DefinitionBlock, ParseError> {
+    let pos = &keyword.pos;
 
-        match keyword.token {
-            RawToken::Languages => Block::try_parse(lexer, pos).map(Self::Languages),
-            RawToken::Parameters => Block::try_parse(lexer, pos).map(Self::Parameters),
-            RawToken::Features => Block::try_parse(lexer, pos).map(Self::Features),
-            RawToken::Characters => Block::try_parse(lexer, pos).map(Self::Characters),
-            RawToken::Diacritics => Block::try_parse(lexer, pos).map(Self::Diacritics),
-            RawToken::Evolve => Evolution::try_parse(lexer, pos)
-                .map(Box::new)
-                .map(Self::Evolve),
-            _ => Err(unexpect(keyword, Expectation::DefinitionKeyword)),
+    match keyword.token {
+        RawToken::Languages => Block::try_parse(lexer, pos).map(DefinitionBlock::Languages),
+        RawToken::Parameters => Block::try_parse(lexer, pos).map(DefinitionBlock::Parameters),
+        RawToken::Features => Block::try_parse(lexer, pos).map(DefinitionBlock::Features),
+        RawToken::Characters => Block::try_parse(lexer, pos).map(DefinitionBlock::Characters),
+        RawToken::Diacritics => Block::try_parse(lexer, pos).map(DefinitionBlock::Diacritics),
+        RawToken::Evolve => Evolution::try_parse(lexer, pos)
+            .map(Box::new)
+            .map(DefinitionBlock::Evolve),
+        _ => Err(unexpect(keyword, Expectation::DefinitionKeyword)),
+    }
+}
+
+pub struct ConfigParser {
+    lexer: Lexer<std::io::BufReader<std::fs::File>>,
+    // We're seperating IO errors here like we do in the lexer so that we can
+    // easily turn this into a vector of io errors when we implement multi-files
+    io_error: Vec<crate::error_handling::Error<crate::error_handling::IOError>>,
+}
+
+impl ConfigParser {
+    pub fn new(
+        path: PathBuf,
+    ) -> Result<Self, crate::error_handling::Error<crate::error_handling::IOError>> {
+        let file = std::fs::File::open(&path).map_err(|e| {
+            let file_pos = FilePosition::new(Some(&path.as_path().into()), None, None);
+            wrap_io_error("parser", Some(&file_pos))(e)
+        })?;
+
+        let lexer = Lexer::lex(std::io::BufReader::new(file), Some(path));
+
+        Ok(Self {
+            lexer,
+            io_error: Vec::new(),
+        })
+    }
+}
+
+impl Iterator for ConfigParser {
+    type Item = Result<DefinitionBlock, ParseError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if !self.io_error.is_empty() {
+            return None;
+        }
+
+        if let Some(keyword) = self.lexer.next() {
+            Some(parse_definition_block(&mut self.lexer, keyword))
+        } else {
+            if let Some(lexer_error) = self.lexer.io_error.take() {
+                self.io_error.push(lexer_error);
+            }
+            None
         }
     }
 }
