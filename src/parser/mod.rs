@@ -6,14 +6,14 @@ use std::path::PathBuf;
 
 use crate::error_handling::{ErrorType, FilePosition, wrap_io_error};
 use crate::lexer::{Lexer, RawToken, Token};
-use crate::parser::errors::ParseError;
 use crate::phonemes::SelectorCode;
+pub use errors::ParseError;
 use errors::{Expectation, eof, unexpect};
 
 use errors::ParseErrorType::*;
 use itertools::{Itertools, PeekingNext};
 
-trait Parse<E>: Sized {
+pub trait Parse<E>: Sized {
     fn try_parse(lexer: &mut impl Iterator<Item = Token>, pos: &FilePosition) -> Result<Self, E>;
 
     fn parse_iter(
@@ -41,9 +41,9 @@ trait Parse<E>: Sized {
 }
 
 #[derive(Debug, PartialEq)]
-struct Identifier {
-    text: String,
-    pos: FilePosition,
+pub struct Identifier {
+    pub text: String,
+    pub pos: FilePosition,
 }
 
 impl Parse<ParseError> for Identifier {
@@ -67,7 +67,7 @@ impl Parse<ParseError> for Identifier {
 }
 
 #[derive(Debug, PartialEq)]
-enum FilterAttributeKind {
+pub enum FilterAttributeKind {
     Feature(bool, String),
     Parameter(bool, String, String),
     Character(String),
@@ -90,7 +90,7 @@ impl TryFrom<Token> for FilterAttributeKind {
 }
 
 #[derive(Debug, PartialEq)]
-enum PhonemeAttributeKind {
+pub enum PhonemeAttributeKind {
     Feature(bool, String),
     Parameter(String, String),
     Character(String),
@@ -112,7 +112,7 @@ impl TryFrom<Token> for PhonemeAttributeKind {
 }
 
 #[derive(Debug, PartialEq)]
-enum OutputAttributeKind {
+pub enum OutputAttributeKind {
     Feature(bool, String),
     Parameter(String, String),
     Character(String),
@@ -135,7 +135,7 @@ impl TryFrom<Token> for OutputAttributeKind {
 }
 
 #[derive(Debug, PartialEq)]
-struct Attribute<T: TryFrom<Token, Error = ParseError>> {
+pub struct Attribute<T: TryFrom<Token, Error = ParseError>> {
     kind: T,
     pos: FilePosition,
 }
@@ -162,7 +162,7 @@ type PhonemeAttribute = Attribute<PhonemeAttributeKind>;
 type OutputAttribute = Attribute<OutputAttributeKind>;
 
 #[derive(Debug, PartialEq)]
-struct Phoneme {
+pub struct Phoneme {
     attributes: Vec<Result<PhonemeAttribute, ParseError>>,
     pos: FilePosition,
 }
@@ -185,7 +185,7 @@ impl Parse<ParseError> for Phoneme {
 }
 
 #[derive(Debug, PartialEq)]
-struct Filter {
+pub struct Filter {
     attributes: Vec<Result<FilterAttribute, ParseError>>,
     pos: FilePosition,
 }
@@ -205,7 +205,7 @@ impl Parse<ParseError> for Filter {
 }
 
 #[derive(Debug, PartialEq)]
-struct Selector {
+pub struct Selector {
     attributes: Vec<Result<FilterAttribute, ParseError>>,
     code: SelectorCode,
     pos: FilePosition,
@@ -230,7 +230,7 @@ impl Selector {
 }
 
 #[derive(Debug, PartialEq)]
-struct OutputPhoneme {
+pub struct OutputPhoneme {
     attributes: Vec<Result<OutputAttribute, ParseError>>,
     pos: FilePosition,
 }
@@ -259,7 +259,7 @@ impl Parse<ParseError> for OutputPhoneme {
 }
 
 #[derive(Debug, PartialEq)]
-enum InputAtom {
+pub enum InputAtom {
     Phoneme(Result<Phoneme, ParseError>),
     Filter(Result<Filter, ParseError>),
     Selector(Result<Selector, ParseError>),
@@ -291,7 +291,7 @@ impl Parse<ParseError> for InputAtom {
 }
 
 #[derive(Debug, PartialEq)]
-enum EnvironmentAtom {
+pub enum EnvironmentAtom {
     Phoneme(Result<Phoneme, ParseError>),
     Filter(Result<Filter, ParseError>),
     Identifier(Result<Identifier, ParseError>),
@@ -329,7 +329,7 @@ impl Parse<ParseError> for EnvironmentAtom {
 }
 
 #[derive(Debug, PartialEq)]
-struct Environment {
+pub struct Environment {
     start: bool,
     end: bool,
     pre: Vec<Result<EnvironmentAtom, ParseError>>,
@@ -391,7 +391,7 @@ impl Parse<ParseError> for Environment {
 }
 
 #[derive(Debug, PartialEq)]
-struct Rule {
+pub struct Rule {
     input: Vec<Result<InputAtom, ParseError>>,
     output: Vec<Result<OutputPhoneme, ParseError>>,
     env: Result<Environment, ParseError>,
@@ -428,7 +428,7 @@ fn parse_rule_output(
 }
 
 #[derive(Debug, PartialEq)]
-struct Diacritic {
+pub struct Diacritic {
     char: char,
     pos: FilePosition,
 }
@@ -450,7 +450,7 @@ impl Parse<ParseError> for Diacritic {
 }
 
 #[derive(Debug, PartialEq)]
-struct DiacriticDefinition {
+pub struct DiacriticDefinition {
     diacritic: Diacritic,
     definition: Result<PhonemeAttribute, ParseError>,
     excess_tokens: Vec<ParseError>,
@@ -483,7 +483,7 @@ impl Parse<Vec<ParseError>> for DiacriticDefinition {
 }
 
 #[derive(Debug, PartialEq)]
-struct CharacterDefinition {
+pub struct CharacterDefinition {
     character: Identifier,
     definition: Result<Phoneme, ParseError>,
     excess_tokens: Vec<ParseError>,
@@ -537,7 +537,7 @@ fn parse_character_def_body(
 }
 
 #[derive(Debug, PartialEq)]
-struct ParameterDefinition {
+pub struct ParameterDefinition {
     parameter: Identifier,
     variants: Vec<Result<Identifier, ParseError>>,
 }
@@ -566,9 +566,9 @@ impl Parse<Vec<ParseError>> for ParameterDefinition {
 }
 
 #[derive(Debug, PartialEq)]
-struct IdentifierLine {
-    identifier: Identifier,
-    excess_tokens: Vec<ParseError>,
+pub struct IdentifierLine {
+    pub identifier: Identifier,
+    pub excess_tokens: Vec<ParseError>,
 }
 
 impl Parse<Vec<ParseError>> for IdentifierLine {
@@ -595,11 +595,11 @@ impl Parse<Vec<ParseError>> for IdentifierLine {
 }
 
 #[derive(Debug, PartialEq)]
-struct Block<T: Parse<E>, E> {
-    definitions: Vec<Result<T, E>>,
+pub struct Block<T: Parse<E>, E> {
+    pub definitions: Vec<Result<T, E>>,
     // For recording if the block is not closed properly
-    close_error: Result<(), ParseError>,
-    pos: FilePosition,
+    pub close_error: Result<(), ParseError>,
+    pub pos: FilePosition,
 }
 
 impl<T: Parse<E>, E> Parse<ParseError> for Block<T, E> {
@@ -625,7 +625,7 @@ impl<T: Parse<E>, E> Parse<ParseError> for Block<T, E> {
 }
 
 #[derive(Debug, PartialEq)]
-struct Evolution {
+pub struct Evolution {
     start: Result<Identifier, ParseError>,
     // For recording if `to` is absent
     missing_to: Result<(), ParseError>,
@@ -703,7 +703,7 @@ pub enum DefinitionBlock {
 // they'll need to consume the first token, which then needs to be passed to
 // this function. Additionally, this function does not need a fallback pos. For
 // these reasons, we cannot implement Parse.
-fn parse_definition_block(
+pub fn parse_definition_block(
     lexer: &mut impl Iterator<Item = Token>,
     keyword: Token,
 ) -> Result<DefinitionBlock, ParseError> {
@@ -726,7 +726,7 @@ pub struct ConfigParser {
     lexer: Lexer<std::io::BufReader<std::fs::File>>,
     // We're seperating IO errors here like we do in the lexer so that we can
     // easily turn this into a vector of io errors when we implement multi-files
-    io_error: Vec<crate::error_handling::Error<crate::error_handling::IOError>>,
+    pub io_error: Vec<crate::error_handling::Error<crate::error_handling::IOError>>,
 }
 
 impl ConfigParser {
