@@ -58,3 +58,46 @@ fn features_block() {
         assert!(actual.features.encode(feature).is_some());
     }
 }
+
+#[test]
+fn parameters_block() {
+    let input_str = "parameters { alpha bravo charlie; delta echo foxtrot }";
+    let parameters: [(&str, [&str; 2]); 2] = [
+        ("alpha", ["bravo", "charlie"]),
+        ("delta", ["echo", "foxtrot"]),
+    ];
+
+    let mut actual = Config::new();
+    let a_lexer = &mut lex_str(input_str);
+    let keyword = a_lexer.next().unwrap();
+    let block = parse_definition_block(a_lexer, keyword).unwrap();
+    compile_definition_block(block, &mut actual, &mut Logger::new());
+
+    for (parameter, variants) in parameters {
+        for variant in variants {
+            assert!(
+                actual
+                    .parameters
+                    .encode(&parameter.into(), &variant.into())
+                    .is_some_and(|(_, var_code)| var_code.is_some())
+            );
+        }
+    }
+}
+
+#[test]
+fn parameter_redefinition() {
+    let input_str = "parameters { alpha; alpha }";
+
+    let pos = lex_str(input_str).nth(4).unwrap().pos;
+    let expected = Redefinition(Defineable::Parameter("alpha".to_string())).at(pos);
+
+    let mut logger = Logger::new();
+    let a_lexer = &mut lex_str(input_str);
+    let keyword = a_lexer.next().unwrap();
+    let block = parse_definition_block(a_lexer, keyword).unwrap();
+    compile_definition_block(block, &mut Config::new(), &mut logger);
+    let actual = logger.errors.pop_back().unwrap();
+
+    assert_eq!(actual, expected);
+}

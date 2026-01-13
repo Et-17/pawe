@@ -104,4 +104,19 @@ impl Logger {
             self.emit(error);
         }
     }
+
+    // Filters the Errs from an IntoIter<Result> and returns an iterator over
+    // the Ok values
+    pub fn extract_ok<E: Into<CompileError>, T, I: IntoIterator<Item = Result<T, E>>>(
+        &mut self,
+        iter: I,
+    ) -> impl Iterator<Item = T> {
+        iter.into_iter().filter_map(|result| match result {
+            Ok(value) => Some(value),
+            Err(error) => {
+                self.emit(error);
+                None
+            }
+        })
+    }
 }

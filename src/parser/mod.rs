@@ -538,8 +538,8 @@ fn parse_character_def_body(
 
 #[derive(Debug, PartialEq)]
 pub struct ParameterDefinition {
-    parameter: Identifier,
-    variants: Vec<Result<Identifier, ParseError>>,
+    pub parameter: Identifier,
+    pub variants: Vec<Result<Identifier, ParseError>>,
 }
 
 impl Parse<Vec<ParseError>> for ParameterDefinition {
