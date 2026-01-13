@@ -947,6 +947,6 @@ fn invalid_char_cfg_prsr() {
     let mut actual = ConfigParser::new(input_file).unwrap();
     while actual.next().is_some() {}
 
-    assert_eq!(actual.io_error.len(), 1);
+    assert_eq!(actual.io_errors.len(), 1);
     assert!(actual.next().is_none());
 }

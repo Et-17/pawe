@@ -17,12 +17,12 @@ fn compiler_passes_def_block_errs() {
         &FilePosition::default(),
     )
     .unwrap();
-    let mut actual = Vec::new();
+    let mut actual = Logger::new();
     define_block(block, |_, _, _| (), &mut Config::new(), &mut actual);
 
     // We expect to see the unexpected token errors for the word boundary, and
     // then an error for the unclosed block.
-    assert_eq!(actual.len(), 2);
+    assert_eq!(actual.errors.len(), 2);
 }
 
 #[test]
@@ -34,7 +34,7 @@ fn languages_block() {
     let a_lexer = &mut lex_str(input_str);
     let keyword = a_lexer.next().unwrap();
     let block = parse_definition_block(a_lexer, keyword).unwrap();
-    compile_definition_block(block, &mut actual, &mut Vec::new());
+    compile_definition_block(block, &mut actual, &mut Logger::new());
 
     for language in &languages {
         assert!(actual.languages.encode(language).is_some());
@@ -52,7 +52,7 @@ fn features_block() {
     let a_lexer = &mut lex_str(input_str);
     let keyword = a_lexer.next().unwrap();
     let block = parse_definition_block(a_lexer, keyword).unwrap();
-    compile_definition_block(block, &mut actual, &mut Vec::new());
+    compile_definition_block(block, &mut actual, &mut Logger::new());
 
     for feature in &features {
         assert!(actual.features.encode(feature).is_some());

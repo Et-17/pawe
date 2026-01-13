@@ -7,8 +7,8 @@ use std::path::PathBuf;
 use crate::error_handling::{ErrorType, FilePosition, wrap_io_error};
 use crate::lexer::{Lexer, RawToken, Token};
 use crate::phonemes::SelectorCode;
-pub use errors::ParseError;
 use errors::{Expectation, eof, unexpect};
+pub use errors::{ParseError, ParseErrorType};
 
 use errors::ParseErrorType::*;
 use itertools::{Itertools, PeekingNext};
@@ -726,7 +726,7 @@ pub struct ConfigParser {
     lexer: Lexer<std::io::BufReader<std::fs::File>>,
     // We're seperating IO errors here like we do in the lexer so that we can
     // easily turn this into a vector of io errors when we implement multi-files
-    pub io_error: Vec<crate::error_handling::Error<crate::error_handling::IOError>>,
+    pub io_errors: Vec<crate::error_handling::Error<crate::error_handling::IOError>>,
 }
 
 impl ConfigParser {
@@ -742,7 +742,7 @@ impl ConfigParser {
 
         Ok(Self {
             lexer,
-            io_error: Vec::new(),
+            io_errors: Vec::new(),
         })
     }
 }
@@ -751,7 +751,7 @@ impl Iterator for ConfigParser {
     type Item = Result<DefinitionBlock, ParseError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if !self.io_error.is_empty() {
+        if !self.io_errors.is_empty() {
             return None;
         }
 
@@ -759,7 +759,7 @@ impl Iterator for ConfigParser {
             Some(parse_definition_block(&mut self.lexer, keyword))
         } else {
             if let Some(lexer_error) = self.lexer.io_error.take() {
-                self.io_error.push(lexer_error);
+                self.io_errors.push(lexer_error);
             }
             None
         }

@@ -1,3 +1,4 @@
+mod errors;
 #[cfg(test)]
 mod tests;
 
@@ -5,6 +6,7 @@ use std::path::PathBuf;
 
 use itertools::Itertools;
 
+use crate::compiler::errors::Logger;
 use crate::config::Config;
 use crate::error_handling::{Error, check_errors};
 use crate::phonemes::Phoneme;
@@ -14,8 +16,6 @@ use crate::phonemes::Phoneme;
 #[allow(clippy::wildcard_imports)]
 use crate::parser::*;
 
-type Errors<'a> = &'a mut Vec<Error>;
-
 pub fn parse_word(word: &str, config: &Config) -> Result<Vec<Phoneme>, Vec<Error>> {
     todo!()
 }
@@ -23,21 +23,22 @@ pub fn parse_word(word: &str, config: &Config) -> Result<Vec<Phoneme>, Vec<Error
 pub fn parse_config_file(path: PathBuf) -> Result<Config, Vec<Error>> {
     let mut parser = ConfigParser::new(path)?;
     let mut config = Config::new();
-    let mut errors = Vec::new();
+    let mut logger = Logger::new();
 
     for block_res in parser.by_ref() {
         match block_res {
-            Ok(block) => compile_definition_block(block, &mut config, &mut errors),
-            Err(error) => errors.push(error.into()),
+            Ok(block) => compile_definition_block(block, &mut config, &mut logger),
+            Err(error) => logger.emit(error),
         }
     }
 
-    errors.extend(parser.io_error.into_iter().map_into());
+    let mut errors: Vec<Error> = logger.errors.into_iter().map_into().collect_vec();
+    errors.extend(parser.io_errors.into_iter().map_into());
 
     check_errors(config, errors)
 }
 
-pub fn compile_definition_block(block: DefinitionBlock, config: &mut Config, errors: Errors) {
+pub fn compile_definition_block(block: DefinitionBlock, config: &mut Config, errors: &mut Logger) {
     match block {
         DefinitionBlock::Languages(block) => define_block(block, define_language, config, errors),
         DefinitionBlock::Parameters(block) => todo!(),
@@ -50,30 +51,28 @@ pub fn compile_definition_block(block: DefinitionBlock, config: &mut Config, err
 
 pub fn define_block<T: Parse<Vec<ParseError>>>(
     block: Block<T, Vec<ParseError>>,
-    definer: impl Fn(T, &mut Config, Errors),
+    definer: impl Fn(T, &mut Config, &mut Logger),
     config: &mut Config,
-    errors: Errors,
+    logger: &mut Logger,
 ) {
-    if let Err(error) = block.close_error {
-        errors.push(error.into());
-    }
+    logger.emit_r(block.close_error);
 
     for definition_res in block.definitions {
         match definition_res {
-            Ok(definition) => definer(definition, config, errors),
-            Err(error_vec) => errors.extend(error_vec.into_iter().map_into()),
+            Ok(definition) => definer(definition, config, logger),
+            Err(error_vec) => logger.emit_i(error_vec),
         }
     }
 }
 
-pub fn define_feature(feature: IdentifierLine, config: &mut Config, errors: Errors) {
-    errors.extend(feature.excess_tokens.into_iter().map_into());
+pub fn define_feature(feature: IdentifierLine, config: &mut Config, logger: &mut Logger) {
+    logger.emit_i(feature.excess_tokens);
 
     config.features.add(feature.identifier.text);
 }
 
-pub fn define_language(language: IdentifierLine, config: &mut Config, errors: Errors) {
-    errors.extend(language.excess_tokens.into_iter().map_into());
+pub fn define_language(language: IdentifierLine, config: &mut Config, logger: &mut Logger) {
+    logger.emit_i(language.excess_tokens);
 
     config
         .first_language
